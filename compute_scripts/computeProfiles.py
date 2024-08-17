@@ -85,21 +85,37 @@ def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "
     Loop through every file of a given run.  Compute profiles, then save a dictionary to a pickle.
     """
 
-    allFiles = sorted(glob.glob(os.path.join(runName, "*.phdf")))
+    print("calculating " + runName)
+
+    allFiles = glob.glob(os.path.join(runName, "*.phdf"))
+    runIndices = np.array([int(fname.split(".")[-2]) for fname in allFiles])
+    order = np.argsort(runIndices)
+    allFiles = np.array(allFiles)[order]
     allFiles_calc = np.copy(allFiles)
 
     # zone-independent information from h5py
     f = h5py.File(allFiles[0], "r")
-    nzones = f["Params"].attrs["Multizone/nzones"]
-    try:
-        nzones_eff = f["Params"].attrs["Multizone/nzones_eff"]
-    except:
-        nzones_eff = nzones
-    try:
-        base = float(dump["base"])
-    except:
-        base = 8.0
-    ncycle_per_zone = f["Params"].attrs["Multizone/ncycle_per_zone"]
+    dump = pyharm.load_dump(allFiles[0])
+    oz = dump["driver/type"] != "multizone"
+    if oz:
+        nzones = 1
+        nzones_eff = 1
+        base = np.sqrt(dump["r_out"] / dump["r_in"])
+        ncycle_per_zone = -1
+    else:
+        try:
+            nzones = f["Params"].attrs["Multizone/nzones"]
+        except:
+            nzones = dump["nzone"]
+        try:
+            base = float(dump["base"])
+        except:
+            base = 8.0
+        try:
+            nzones_eff = f["Params"].attrs["Multizone/nzones_eff"]
+        except:
+            nzones_eff = nzones
+        ncycle_per_zone = f["Params"].attrs["Multizone/ncycle_per_zone"]
     f.close()
 
     # initialization of lists
@@ -133,8 +149,8 @@ def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "
         # check the assumption
         dump = pyharm.load_dump(allFiles[num_saved - 1])
         if listOfCycles[-1] != dump["n_step"]:
-            pdb.set_trace()
             print("WARNING! There has been a change of list of output dumps! Please check the list of dumps again.")
+            return
         print("Calculation exists and starting from dump # {}".format(num_saved))
 
     for file in allFiles_calc:
@@ -142,12 +158,17 @@ def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "
         dump = pyharm.load_dump(file)
 
         # basic multizone information
-        i_within_vcycle = f["Params"].attrs["Multizone/i_within_vcycle"]
-        i_vcycle = f["Params"].attrs["Multizone/i_vcycle"]
-        i_zone = abs(i_within_vcycle - (nzones_eff - 1))
-        print(i_vcycle, i_zone)
-        n0_zone = f["Params"].attrs["Multizone/n0_zone"]
-        t0_zone = f["Params"].attrs["Multizone/t0_zone"]
+        if oz:
+            i_zone = 0
+            n0_zone = 0
+            t0_zone = 0
+        else:
+            i_within_vcycle = f["Params"].attrs["Multizone/i_within_vcycle"]
+            i_vcycle = f["Params"].attrs["Multizone/i_vcycle"]
+            i_zone = abs(i_within_vcycle - (nzones_eff - 1))
+            print("Vcycle #: {:d}, zone #: {:d}".format(i_vcycle, i_zone))
+            n0_zone = f["Params"].attrs["Multizone/n0_zone"]
+            t0_zone = f["Params"].attrs["Multizone/t0_zone"]
 
         listOfProfiles.append(computeProfileSet(dump, quantities=quantities, density_weight=density_weight))
         listOfTimes.append(dump["t"])
@@ -156,14 +177,18 @@ def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "
         listOfn0.append(n0_zone)
         listOft0.append(t0_zone)
         if listOfActiveRange[i_zone] is None:
-            try:
-                active_rin = f["Params"].attrs["Multizone/active_rin"]
-            except:
-                active_rin = base ** (i_zone - 1)
-            try:
-                active_rout = f["Params"].attrs["Multizone/active_rout"]
-            except:
-                active_rout = base ** (i_zone + 1)
+            if oz:
+                active_rin = dump["r_in"]
+                active_rout = dump["r_out"]
+            else:
+                try:
+                    active_rin = f["Params"].attrs["Multizone/active_rin"]
+                except:
+                    active_rin = int(base ** (i_zone))
+                try:
+                    active_rout = f["Params"].attrs["Multizone/active_rout"]
+                except:
+                    active_rout = int(base ** (i_zone + 2))
             listOfActiveRange[i_zone] = [active_rin, active_rout]
 
         f.close()
