@@ -30,10 +30,22 @@ def get_mask(dictionary):
         mask_temp[radii > active_range[zone][1]] = False
 
         # mask the overlap region
-        active = np.argwhere(mask_temp)[:, 0]
-        mask_temp[: active[0] + overlap] = False
-        mask_temp[active[-1] + 1 - overlap :] = False
+        if n_zones_eff > 1:
+            active = np.argwhere(mask_temp)[:, 0]
+            if zone > 0:
+                mask_temp[: active[0] + overlap] = False
+            if zone < n_zones_eff - 1:
+                mask_temp[active[-1] + 1 - overlap :] = False
         mask += [mask_temp]
+
+        # further check if there is still an overlap, if there is, prioritize smaller ann first
+        if zone > 0:
+            zone_temp = zone - 1
+            while len(radii[mask[zone_temp]]) > 0 and zone_temp >= 0:
+                rout_smaller_ann = np.power(10.0, np.log10(radii[mask[zone - 1]][-1]) + dx1 / 2.0)
+                zone_temp -= 1
+            still_overlaps = radii <= rout_smaller_ann
+            mask[zone][still_overlaps] = False
 
     return mask
 
@@ -232,14 +244,18 @@ def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2):
     return tDivList, binNumList
 
 
-def plotProfileQuantity(ax, radii, profile, tDivList):
+def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, label=None):
     # n_zones_eff = len(profile)
     num_time_chunk = len(profile)
-    colors = plt.cm.gnuplot(np.linspace(0.9, 0.3, num_time_chunk))
+    if colors is None:
+        colors = plt.cm.gnuplot(np.linspace(0.9, 0.3, num_time_chunk))
     for b in range(num_time_chunk):
-        label = "t={:.5g} - {:.5g}".format(tDivList[b], tDivList[b + 1])
+        if label is None:
+            label_use = "t={:.5g} - {:.5g}".format(tDivList[b], tDivList[b + 1])
+        else:
+            label_use = label
         if len(radii[b]) > 0:
-            ax.plot(radii[b], profile[b], color=colors[b], lw=2, label=label)
+            ax.plot(radii[b], profile[b], color=colors[b], lw=2, label=label_use)
     #    for zone in range(n_zones_eff):
     #        if len(profile[zone][b]) == 0:
     #            # empty
@@ -258,6 +274,7 @@ def plotProfiles(
     plot_dir="../plots/test",
     fig_ax=None,
     color_list=None,
+    label=None,
     linestyle_list=None,
     formatting=True,
     figsize=(8, 6),
@@ -271,50 +288,64 @@ def plotProfiles(
     matplotlib_settings()
 
     # If you want, provide your own figure and axis.  Good for multipanel plots.
-    # if fig_ax is None:
-    #    fig, ax = plt.subplots(1, 1, figsize=figsize)
-    # else:
-    #    fig, ax = fig_ax
+    if fig_ax is not None:
+        fig, axes = fig_ax
+        ax1d = axes.reshape(-1)
 
     plotrc = {}
     with open(pkl_name, "rb") as openFile:
         D = pickle.load(openFile)
 
-        tDivList, binNumList = setTimeBins(D, num_time_chunk)
-        mask_list = get_mask(D)
+    tDivList, binNumList = setTimeBins(D, num_time_chunk)
+    mask_list = get_mask(D)
 
-        for quantity in quantity_list:
+    for i, quantity in enumerate(quantity_list):
+        if fig_ax is None:
             fig, ax = plt.subplots(1, 1, figsize=figsize)
+        else:
+            ax = ax1d[i]  # here we assume that the number of axes passed = number of quantities
 
-            radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac, mask_list=mask_list)
+        radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac, mask_list=mask_list)
+        if i == 0:
+            for b in range(len(tDivList) - 1):
+                print("{}: t={:.3g}-{:.3g}".format(b, tDivList[b], tDivList[b + 1]))
 
-            plotProfileQuantity(ax, radii, profiles, tDivList)
+        plotProfileQuantity(ax, radii, profiles, tDivList, colors=color_list, label=label)
 
-            # Formatting
-            if formatting:
-                ax.set_xlabel("Radius [$r_g$]")
-                ylabel = variableToLabel(quantity)
-                # if eta_norm_Bondi and quantity=='eta':
-                #    ylabel = r'$\overline{\dot{M}-\dot{E}}/\dot{M}_B$'
-                ax.set_ylabel(ylabel)
-                ax.set_xscale("log")
-                ax.set_yscale("log")
-                # ax.set_xlim(xlim); ax.set_ylim(ylim)
+        # Formatting
+        if formatting:
+            ax.set_xlabel("Radius [$r_g$]")
+            ylabel = variableToLabel(quantity)
+            # if eta_norm_Bondi and quantity=='eta':
+            #    ylabel = r'$\overline{\dot{M}-\dot{E}}/\dot{M}_B$'
+            ax.set_ylabel(ylabel)
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            # ax.set_xlim(xlim); ax.set_ylim(ylim)
 
-            # profiles = readQuantity(D, quantity)
+        if fig_ax is None:
             output = plot_dir + "/profile_" + quantity + ".png"  # pdf"
             plt.savefig(output, bbox_inches="tight")
             plt.close()
             print("saved to " + output)
 
+    if fig_ax is not None:
+        return (fig, axes)
+
 
 if __name__ == "__main__":
-    # TODO compare between runs
+    # pkl_name = "../data_products/051224_bondi_kerr/00000_profiles_all.pkl"
     # pkl_name = "../data_products/061724_fastvc/combineout_restructured_profiles_all.pkl"
     # pkl_name = "../data_products/061724_fastvc/combineout_ncycle200_profiles_all.pkl"
     # pkl_name = "../data_products/061724_fastvc/combineout_nocap_profiles_all.pkl"
-    # pkl_name = "../data_products/061724_fastvc/combineout_ismr_profiles_all.pkl" #_nolongtin #a0.5_
-    pkl_name = "../data_products/061724_fastvc/combineout_ismr_a0.5_ncycle50_profiles_all.pkl"  # _nolongtin #
+    pkl_name = "../data_products/061724_fastvc/combineout_ismr/dirichlet_and_no_recon_floor_profiles_all.pkl"  # _nolongtin #a0.5_ #
+    pkl_name = "../data_products/061724_fastvc/combineout_ismr_a0.5_bfluxc/test_new_dump_cadence_profiles_all.pkl"  # #moverin_ _nolongtin #
+    # pkl_name = "../data_products/061724_fastvc/combineout_ismr_a0.5_ncycle50_profiles_all.pkl"
+    # pkl_name = "../data_products/080724_fastvc_consistentB/mad_stock_profiles_all.pkl"
+    # pkl_name = "../data_products/081424_a0.5_bfluxc_moverin_profiles_all.pkl" #_nocap
+    # pkl_name = "../data_products/081524_a0.5_bflux0_moverin_profiles_all.pkl" #tchar_
+    # pkl_name = "../data_products/081524_a0.5_ncycle50_profiles_all.pkl"
+    pkl_name = "../data_products/081624_a0.5_bfluxc_moverin_longtin4_profiles_all.pkl"
 
     plot_dir = "../plots/test"  # common directory
     os.makedirs(plot_dir, exist_ok=True)
@@ -330,5 +361,6 @@ if __name__ == "__main__":
         "eta_EM",
     ]  # ["Ldot", "rho", "eta", "Mdot", "b", "K", "beta", "Edot", "u", "T", "abs_u^r", "abs_u^phi", "abs_u^th", "u^r", "u^phi", "u^th", "abs_Omega", "Omega"]
     #'Etot',
+    print(pkl_name)
     plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=6)
     # , zone_time_average_fraction=avg_frac, cycles_to_average=cta, color_list=colors, linestyle_list=linestyles, label_list=listOfLabels, rescale=False, rescale_Mdot=True, flatten_rho=flatten_rho, \
