@@ -138,8 +138,6 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
 
     return avgedProfiles, invert
 
-    # tDivList, usableProfiles, r_save, num_save = assignTimeBins(D, profiles, ONEZONE, num_time_chunk, zone_time_average_fraction, average_factor, tmax)
-
 
 def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0.5, mask_list=None):
     """
@@ -152,7 +150,7 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
     # list initialization
     avgedProfiles = [[[] for _ in range(num_time_chunk)] for _ in range(n_zones_eff)]  # (n_zones_eff, num_time_chunk) dimension
 
-    if quantity == "eta" or quantity == "eta_EM" or quantity == "eta_Fl":
+    if "eta" in quantity or quantity == "u^r":
         avgedProfiles_Mdot, _ = timeAvgPerBin(dictionary, tDivList, binNumList, "Mdot", perzone_avg_frac=perzone_avg_frac)
         i10 = np.argmin(abs(radii - 10))
 
@@ -186,7 +184,11 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
             for zone in range(n_zones_eff):
                 if len(avgedProfiles_EdotEM[zone][b]) > 0:
                     avgedProfiles[zone][b] = -avgedProfiles_EdotEM[zone][b] / Mdot10
-    # TODO: need separate procedure for u^r?
+    elif quantity == "u^r":
+        avgedProfiles_rho, invert = timeAvgPerBin(dictionary, tDivList, binNumList, "rho", perzone_avg_frac=perzone_avg_frac)
+        for b in range(num_time_chunk):
+            for zone in range(n_zones_eff):
+                avgedProfiles[zone][b] = avgedProfiles_Mdot[zone][b] / (avgedProfiles_rho[zone][b] * (4.0 * np.pi * radii**2))
     else:
         avgedProfiles, invert = timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac)
 
@@ -210,7 +212,12 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
         rList[b] = r_combined
         valuesList[b] = values_combined
 
-    # TODO: rescale
+    # any final operations
+    ## normalization
+    if "Omega" in quantity:
+        valuesList = [valuesList[b] * np.power(radii, 3.0 / 2) for b in range(num_time_chunk)]  # normalize by Omega_K
+    ## TODO: rescale
+    ## invert
     if invert:
         # Flip the quantity upside-down, usually for inv_beta.
         valuesList = [1.0 / valuesList[b] if (len(valuesList[b]) > 0) else valuesList[b] for b in range(num_time_chunk)]
@@ -341,11 +348,26 @@ if __name__ == "__main__":
     pkl_name = "../data_products/061724_fastvc/combineout_ismr/dirichlet_and_no_recon_floor_profiles_all.pkl"  # _nolongtin #a0.5_ #
     pkl_name = "../data_products/061724_fastvc/combineout_ismr_a0.5_bfluxc/test_new_dump_cadence_profiles_all.pkl"  # #moverin_ _nolongtin #
     # pkl_name = "../data_products/061724_fastvc/combineout_ismr_a0.5_ncycle50_profiles_all.pkl"
-    # pkl_name = "../data_products/080724_fastvc_consistentB/mad_stock_profiles_all.pkl"
+    pkl_name = "../data_products/080724_fastvc_consistentB/sg07_profiles_all.pkl"
     # pkl_name = "../data_products/081424_a0.5_bfluxc_moverin_profiles_all.pkl" #_nocap
     # pkl_name = "../data_products/081524_a0.5_bflux0_moverin_profiles_all.pkl" #tchar_
-    # pkl_name = "../data_products/081524_a0.5_ncycle50_profiles_all.pkl"
-    pkl_name = "../data_products/081624_a0.5_bfluxc_moverin_longtin4_profiles_all.pkl"
+    pkl_name = "../data_products/081524_a0.5_ncycle50_profiles_all.pkl"
+    # pkl_name = "../data_products/081624_a0.5_bfluxc_moverin_longtin4_profiles_all.pkl"
+    # pkl_name = "../data_products/081724_a0.5_bfluxc_moverin_longtin2_profiles_all.pkl"
+    # pkl_name = "../data_products/081924_a0.5_consistentB_profiles_all.pkl"
+    # pkl_name = "../data_products/082024_a0.5_consistentB_onlyfofc_profiles_all.pkl"
+    # pkl_name = "../data_products/082124_a0.5_consistentB_kastaun_profiles_all.pkl"
+    # pkl_name = "../data_products/082224_a0.9_consistentB_onlyfofc_profiles_all.pkl"
+    # pkl_name = "../data_products/082324_a0.9_consistentB_kastaun_profiles_all.pkl"
+    # pkl_name = "../data_products/082624_a0.5_consistentB_profiles_all.pkl"
+    pkl_name = "../data_products/082724_a0.5_rdepgmax_profiles_all.pkl"
+    # pkl_name = "../data_products/082824_a0.5_nofofc_kastaun_profiles_all.pkl"
+    pkl_name = "../data_products/090124_a0.5_rdepgmax_flr_profiles_all.pkl"
+    pkl_name = "../data_products/090324_a0.5_rdepgmax_flr_1dw_profiles_all.pkl"
+    pkl_name = "../data_products/090424_a0.5_rdepgmax_ctop_profiles_all.pkl"
+    pkl_name = "../data_products/091124_a0.5_production_profiles_all.pkl"
+    # pkl_name = "../data_products/092224_a0.5_production_gmax2_profiles_all.pkl"
+    pkl_name = "../data_products/100224_a0.5_n8_profiles_all.pkl"
 
     plot_dir = "../plots/test"  # common directory
     os.makedirs(plot_dir, exist_ok=True)
@@ -357,10 +379,15 @@ if __name__ == "__main__":
         "beta",
         "eta",
         "rho",
+        "T",
         "eta_Fl",
         "eta_EM",
+        "u^r",
+        "abs_u^r",
+        "Omega",
+        "abs_Omega",
     ]  # ["Ldot", "rho", "eta", "Mdot", "b", "K", "beta", "Edot", "u", "T", "abs_u^r", "abs_u^phi", "abs_u^th", "u^r", "u^phi", "u^th", "abs_Omega", "Omega"]
     #'Etot',
     print(pkl_name)
-    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=6)
+    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=3)
     # , zone_time_average_fraction=avg_frac, cycles_to_average=cta, color_list=colors, linestyle_list=linestyles, label_list=listOfLabels, rescale=False, rescale_Mdot=True, flatten_rho=flatten_rho, \
