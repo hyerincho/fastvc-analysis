@@ -202,6 +202,7 @@ def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "
     D["nzones_eff"] = nzones_eff
     D["radii"] = dump["r1d"]
     D["gam"] = dump["gam"]
+    D["dump"] = dump  # it will have all access to dump's info
     D["base"] = base
     D["ncycle_per_zone"] = ncycle_per_zone
     ## zone-dependent quantities
