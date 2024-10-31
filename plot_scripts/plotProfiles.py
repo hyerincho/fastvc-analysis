@@ -251,7 +251,7 @@ def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2):
     return tDivList, binNumList
 
 
-def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, label=None):
+def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, label=None, linestyle="-"):
     # n_zones_eff = len(profile)
     num_time_chunk = len(profile)
     if colors is None:
@@ -262,7 +262,7 @@ def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, label=None):
         else:
             label_use = label
         if len(radii[b]) > 0:
-            ax.plot(radii[b], profile[b], color=colors[b], lw=2, label=label_use)
+            ax.plot(radii[b], profile[b], color=colors[b], lw=2, label=label_use, ls=linestyle)
     #    for zone in range(n_zones_eff):
     #        if len(profile[zone][b]) == 0:
     #            # empty
@@ -282,7 +282,7 @@ def plotProfiles(
     fig_ax=None,
     color_list=None,
     label=None,
-    linestyle_list=None,
+    linestyle=None,
     formatting=True,
     figsize=(8, 6),
     flip_sign=False,
@@ -290,6 +290,7 @@ def plotProfiles(
     show_rb=False,
     perzone_avg_frac=0.5,
     num_time_chunk=4,
+    time_bin_factor=2,
 ):
     # Changes some defaults.
     matplotlib_settings()
@@ -303,7 +304,7 @@ def plotProfiles(
     with open(pkl_name, "rb") as openFile:
         D = pickle.load(openFile)
 
-    tDivList, binNumList = setTimeBins(D, num_time_chunk)
+    tDivList, binNumList = setTimeBins(D, num_time_chunk, time_bin_factor=time_bin_factor)
     mask_list = get_mask(D)
 
     for i, quantity in enumerate(quantity_list):
@@ -317,7 +318,7 @@ def plotProfiles(
             for b in range(len(tDivList) - 1):
                 print("{}: t={:.3g}-{:.3g}".format(b, tDivList[b], tDivList[b + 1]))
 
-        plotProfileQuantity(ax, radii, profiles, tDivList, colors=color_list, label=label)
+        plotProfileQuantity(ax, radii, profiles, tDivList, colors=color_list, label=label, linestyle=linestyle)
 
         # Formatting
         if formatting:
@@ -328,7 +329,15 @@ def plotProfiles(
             ax.set_ylabel(ylabel)
             ax.set_xscale("log")
             ax.set_yscale("log")
-            # ax.set_xlim(xlim); ax.set_ylim(ylim)
+            if "eta" in quantity and quantity != "beta":
+                ax.set_ylim([1e-3, 4])
+            try:
+                rEH = D["dump"]["r_eh"]
+            except:
+                a = 0  # for now
+                rEH = 1.0 + np.sqrt(1.0 - a**2)
+            xlim = (rEH, ax.get_xlim()[-1])
+            ax.set_xlim(xlim)
 
         if fig_ax is None:
             output = plot_dir + "/profile_" + quantity + ".png"  # pdf"
@@ -367,7 +376,12 @@ if __name__ == "__main__":
     pkl_name = "../data_products/090424_a0.5_rdepgmax_ctop_profiles_all.pkl"
     pkl_name = "../data_products/091124_a0.5_production_profiles_all.pkl"
     # pkl_name = "../data_products/092224_a0.5_production_gmax2_profiles_all.pkl"
-    pkl_name = "../data_products/100224_a0.5_n8_profiles_all.pkl"
+    pkl_name = "../data_products/100724_a0.5_beta100_rot_profiles_all.pkl"
+    pkl_name = "../data_products/100724_a0.5_oz_profiles_all.pkl"
+    pkl_name = "../data_products/100724_a0.0_n8/nordepgmax_bflux0_tchar_profiles_all.pkl"  #
+    pkl_name = "../data_products/100724_a0.5_n8_profiles_all.pkl"  #
+    pkl_name = "../data_products/101524_a0.5_beta10_rot_profiles_all.pkl"
+    # pkl_name = "../data_products/122723_n4_onezone_wks0.04_profiles_all2.pkl"
 
     plot_dir = "../plots/test"  # common directory
     os.makedirs(plot_dir, exist_ok=True)
@@ -389,5 +403,5 @@ if __name__ == "__main__":
     ]  # ["Ldot", "rho", "eta", "Mdot", "b", "K", "beta", "Edot", "u", "T", "abs_u^r", "abs_u^phi", "abs_u^th", "u^r", "u^phi", "u^th", "abs_Omega", "Omega"]
     #'Etot',
     print(pkl_name)
-    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=3)
+    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=3, time_bin_factor=2)
     # , zone_time_average_fraction=avg_frac, cycles_to_average=cta, color_list=colors, linestyle_list=linestyles, label_list=listOfLabels, rescale=False, rescale_Mdot=True, flatten_rho=flatten_rho, \
