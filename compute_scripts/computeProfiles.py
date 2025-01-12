@@ -88,6 +88,10 @@ def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "
     print("calculating " + runName)
 
     allFiles = glob.glob(os.path.join(runName, "*.phdf"))
+    if len(allFiles) < 1:
+        print("WARNING: phdf files don't exist, trying out rhdf files.")
+        allFiles = glob.glob(os.path.join(runName, "*.rhdf"))
+
     runIndices = np.array([int(fname.split(".")[-2]) for fname in allFiles])
     order = np.argsort(runIndices)
     allFiles = np.array(allFiles)[order]

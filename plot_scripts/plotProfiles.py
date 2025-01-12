@@ -6,7 +6,8 @@ import pickle
 
 from matplotlib_settings import *
 from ylabel_dictionary import *
-
+from plot_utils import *
+import bondi_analytic as bondi
 
 def get_mask(dictionary):
     # basic parsing
@@ -50,35 +51,6 @@ def get_mask(dictionary):
     return mask
 
 
-def readQuantity(dictionary, quantity):
-    invert = False
-    if quantity == "beta":
-        if "inv_beta" in dictionary["quantities"]:
-            quantity = "inv_beta"
-            invert = True
-        else:
-            print("inv_beta doesn't exist, so we will stick with beta.")
-        quantity_index = dictionary["quantities"].index(quantity)
-        profiles = [list[quantity_index] for list in dictionary["profiles"]]
-    elif quantity == "Pg":
-        if "Pg" in dictionary["quantities"]:
-            quantity_index = dictionary["quantities"].index("Pg")
-            profiles = [list[quantity_index] for list in dictionary["profiles"]]
-        else:
-            try:
-                gam = dictionary["gam"]
-            except:
-                gam = 5.0 / 3.0
-            quantity_index = dictionary["quantities"].index("u")
-            profiles = [np.array(list[quantity_index]) * (gam - 1.0) for list in dictionary["profiles"]]
-    elif quantity == "Pb":
-        quantity_index = dictionary["quantities"].index("b")
-        profiles = [np.array(list[quantity_index]) ** 2 / 2.0 for list in dictionary["profiles"]]
-    else:
-        # just reading the pre-calculated quantities
-        quantity_index = dictionary["quantities"].index(quantity)
-        profiles = [list[quantity_index] for list in dictionary["profiles"]]
-    return profiles, invert
 
 
 def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0.5):
@@ -139,18 +111,19 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
     return avgedProfiles, invert
 
 
-def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0.5, mask_list=None):
+def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0.5, mask_list=None, rescale=False):
     """
     Put together the final time averages. If needed, do extra operations.
     """
     radii = dictionary["radii"]
     n_zones_eff = dictionary["nzones_eff"]
     num_time_chunk = len(tDivList) - 1
+    save_rho = rescale and ('Mdot' in quantity)
 
     # list initialization
     avgedProfiles = [[[] for _ in range(num_time_chunk)] for _ in range(n_zones_eff)]  # (n_zones_eff, num_time_chunk) dimension
 
-    if "eta" in quantity or quantity == "u^r":
+    if "eta" in quantity or quantity == "u^r" or quantity == "phib":
         avgedProfiles_Mdot, _ = timeAvgPerBin(dictionary, tDivList, binNumList, "Mdot", perzone_avg_frac=perzone_avg_frac)
         i10 = np.argmin(abs(radii - 10))
 
@@ -189,34 +162,63 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
         for b in range(num_time_chunk):
             for zone in range(n_zones_eff):
                 avgedProfiles[zone][b] = avgedProfiles_Mdot[zone][b] / (avgedProfiles_rho[zone][b] * (4.0 * np.pi * radii**2))
+    elif quantity == 'phib':
+        avgedProfiles_Phib, invert = timeAvgPerBin(dictionary, tDivList, binNumList, "Phib", perzone_avg_frac=perzone_avg_frac)
+        for b in range(num_time_chunk):
+            if len(avgedProfiles_Mdot[0][b]) > 0:
+                Mdot10 = avgedProfiles_Mdot[0][b][i10]  # Mdot at r = 10
+            else:
+                continue
+            for zone in range(n_zones_eff):
+                if len(avgedProfiles_Phib[zone][b]) > 0:
+                    avgedProfiles[zone][b] = avgedProfiles_Phib[zone][b] / np.sqrt(Mdot10)
     else:
         avgedProfiles, invert = timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac)
+
+    if save_rho:
+        avgedProfiles_rho, _ = timeAvgPerBin(dictionary, tDivList, binNumList, 'rho', perzone_avg_frac=perzone_avg_frac)
 
     # list initialization
     rList = [[] for _ in range(num_time_chunk)]
     valuesList = [[] for _ in range(num_time_chunk)]
+    if save_rho: valuesListRho = [[] for _ in range(num_time_chunk)]
 
     # combine zones for each time bin
     for b in range(num_time_chunk):
         r_combined = np.array([])
         values_combined = np.array([])
+        if save_rho: values_combined_rho = np.array([])
         for zone in range(n_zones_eff):
             if mask_list is None:
                 mask = np.full(len(radii), True, dtype=bool)
             else:
                 mask = mask_list[zone]
             profile = avgedProfiles[zone][b]
+            if save_rho: profile_rho = avgedProfiles_rho[zone][b]
             if len(profile) > 0:
                 r_combined = np.concatenate([r_combined, radii[mask]])
                 values_combined = np.concatenate([values_combined, profile[mask]])  # * (-1) ** int(flip_sign)])
+                if save_rho: values_combined_rho = np.concatenate([values_combined_rho, profile_rho[mask]])  # * (-1) ** int(flip_sign)])
         rList[b] = r_combined
         valuesList[b] = values_combined
+        if save_rho: valuesListRho[b] = values_combined_rho
 
     # any final operations
     ## normalization
     if "Omega" in quantity:
         valuesList = [valuesList[b] * np.power(radii, 3.0 / 2) for b in range(num_time_chunk)]  # normalize by Omega_K
-    ## TODO: rescale
+    ## TODO: rescale for Mdot
+    if save_rho:
+        # rescale Mdot depending on the density at Bondi radius
+        r_sonic = dictionary['dump']['rs']
+        rB = bondi.get_quantity_for_rarr([1], 'RB', rs=r_sonic)[0]
+        Mdot_analytic = bondi.get_quantity_for_rarr([rB], 'Mdot', rs=r_sonic)[0]
+        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], 'rho', rs=r_sonic)[0]
+        for b in range(num_time_chunk):
+            rho_save = min(valuesListRho[b][radii < 5 * rB])
+            print(rho_save, rho_analytic / (Mdot_analytic * rho_save))
+            valuesList[b] *= rho_analytic / (Mdot_analytic * rho_save)
+
     ## invert
     if invert:
         # Flip the quantity upside-down, usually for inv_beta.
@@ -224,7 +226,7 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
     return rList, valuesList
 
 
-def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2):
+def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2, tmax=None):
     n_zones_eff = dictionary["nzones_eff"]
     times = dictionary["times"]
     t_first = times[0]
@@ -233,7 +235,10 @@ def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2):
     # list initialization
     binNumList = [None for _ in range(len(times))]  # np.full(len(times), np.nan)
 
-    # TODO: add tmax option
+    if tmax is not None:
+        if t_last > tmax:
+            t_last = tmax
+        else: print("The run hasn't reached {}tg. Instead using {:.3g}tg".format(tmax, t_last))
 
     tDivList = np.array([t_first + (t_last - t_first) / np.power(time_bin_factor, i + 1) for i in range(num_time_chunk)])
     tDivList = tDivList[::-1]  # in increasing time order
@@ -291,6 +296,8 @@ def plotProfiles(
     perzone_avg_frac=0.5,
     num_time_chunk=4,
     time_bin_factor=2,
+    tmax=None,
+    rescale=False,
 ):
     # Changes some defaults.
     matplotlib_settings()
@@ -304,7 +311,7 @@ def plotProfiles(
     with open(pkl_name, "rb") as openFile:
         D = pickle.load(openFile)
 
-    tDivList, binNumList = setTimeBins(D, num_time_chunk, time_bin_factor=time_bin_factor)
+    tDivList, binNumList = setTimeBins(D, num_time_chunk, time_bin_factor=time_bin_factor, tmax=tmax)
     mask_list = get_mask(D)
 
     for i, quantity in enumerate(quantity_list):
@@ -313,7 +320,7 @@ def plotProfiles(
         else:
             ax = ax1d[i]  # here we assume that the number of axes passed = number of quantities
 
-        radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac, mask_list=mask_list)
+        radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac, mask_list=mask_list, rescale=rescale)
         if i == 0:
             for b in range(len(tDivList) - 1):
                 print("{}: t={:.3g}-{:.3g}".format(b, tDivList[b], tDivList[b + 1]))
@@ -326,6 +333,8 @@ def plotProfiles(
             ylabel = variableToLabel(quantity)
             # if eta_norm_Bondi and quantity=='eta':
             #    ylabel = r'$\overline{\dot{M}-\dot{E}}/\dot{M}_B$'
+            if rescale and 'Mdot' in quantity:
+                ylabel = ylabel.replace('arb. units', r'$\dot{M}_B$')
             ax.set_ylabel(ylabel)
             ax.set_xscale("log")
             ax.set_yscale("log")
@@ -350,38 +359,24 @@ def plotProfiles(
 
 
 if __name__ == "__main__":
-    # pkl_name = "../data_products/051224_bondi_kerr/00000_profiles_all.pkl"
-    # pkl_name = "../data_products/061724_fastvc/combineout_restructured_profiles_all.pkl"
-    # pkl_name = "../data_products/061724_fastvc/combineout_ncycle200_profiles_all.pkl"
-    # pkl_name = "../data_products/061724_fastvc/combineout_nocap_profiles_all.pkl"
-    pkl_name = "../data_products/061724_fastvc/combineout_ismr/dirichlet_and_no_recon_floor_profiles_all.pkl"  # _nolongtin #a0.5_ #
-    pkl_name = "../data_products/061724_fastvc/combineout_ismr_a0.5_bfluxc/test_new_dump_cadence_profiles_all.pkl"  # #moverin_ _nolongtin #
-    # pkl_name = "../data_products/061724_fastvc/combineout_ismr_a0.5_ncycle50_profiles_all.pkl"
-    pkl_name = "../data_products/080724_fastvc_consistentB/sg07_profiles_all.pkl"
-    # pkl_name = "../data_products/081424_a0.5_bfluxc_moverin_profiles_all.pkl" #_nocap
-    # pkl_name = "../data_products/081524_a0.5_bflux0_moverin_profiles_all.pkl" #tchar_
-    pkl_name = "../data_products/081524_a0.5_ncycle50_profiles_all.pkl"
-    # pkl_name = "../data_products/081624_a0.5_bfluxc_moverin_longtin4_profiles_all.pkl"
-    # pkl_name = "../data_products/081724_a0.5_bfluxc_moverin_longtin2_profiles_all.pkl"
-    # pkl_name = "../data_products/081924_a0.5_consistentB_profiles_all.pkl"
-    # pkl_name = "../data_products/082024_a0.5_consistentB_onlyfofc_profiles_all.pkl"
-    # pkl_name = "../data_products/082124_a0.5_consistentB_kastaun_profiles_all.pkl"
-    # pkl_name = "../data_products/082224_a0.9_consistentB_onlyfofc_profiles_all.pkl"
-    # pkl_name = "../data_products/082324_a0.9_consistentB_kastaun_profiles_all.pkl"
-    # pkl_name = "../data_products/082624_a0.5_consistentB_profiles_all.pkl"
-    pkl_name = "../data_products/082724_a0.5_rdepgmax_profiles_all.pkl"
-    # pkl_name = "../data_products/082824_a0.5_nofofc_kastaun_profiles_all.pkl"
-    pkl_name = "../data_products/090124_a0.5_rdepgmax_flr_profiles_all.pkl"
-    pkl_name = "../data_products/090324_a0.5_rdepgmax_flr_1dw_profiles_all.pkl"
-    pkl_name = "../data_products/090424_a0.5_rdepgmax_ctop_profiles_all.pkl"
-    pkl_name = "../data_products/091124_a0.5_production_profiles_all.pkl"
-    # pkl_name = "../data_products/092224_a0.5_production_gmax2_profiles_all.pkl"
-    pkl_name = "../data_products/100724_a0.5_beta100_rot_profiles_all.pkl"
-    pkl_name = "../data_products/100724_a0.5_oz_profiles_all.pkl"
-    pkl_name = "../data_products/100724_a0.0_n8/nordepgmax_bflux0_tchar_profiles_all.pkl"  #
-    pkl_name = "../data_products/100724_a0.5_n8_profiles_all.pkl"  #
-    pkl_name = "../data_products/101524_a0.5_beta10_rot_profiles_all.pkl"
-    # pkl_name = "../data_products/122723_n4_onezone_wks0.04_profiles_all2.pkl"
+    #pkl_name = "../data_products/100724_a0.5_n8/high_cadence_profiles_all.pkl"  #
+    #pkl_name = "../data_products/111524_a0.5_torus_profiles_all.pkl"
+    pkl_name = "../data_products/111524_a0.5_oz_128_profiles_all.pkl"
+    #pkl_name = "../data_products/112624_fastervc_a0.5_b2n26/reconnect_profiles_all.pkl"
+    #pkl_name = "../data_products/112924_a0.5_n8_reconnect_profiles_all.pkl"
+    #pkl_name = "../data_products/120824_a0.5_n4_betaflr_profiles_all.pkl"
+    #pkl_name = "../data_products/121024_a0.5_n8_reconnect_rot_profiles_all.pkl"
+    #pkl_name = "../data_products/121024_a0.9_n4_reconnect_profiles_all.pkl"
+    #pkl_name = "../data_products/122624_a0.5_n8_reconnectfix_profiles_all.pkl"
+    pkl_name = "../data_products/123024_a0.5_oz_reconnect_profiles_all.pkl"
+    pkl_name = "../data_products/123124_a0.5_oz_rdepgmax_profiles_all.pkl"
+    pkl_name = "../data_products/010225_a0.5_oz_rdepgmax5_profiles_all.pkl"
+    pkl_name = "../data_products/010625_a0.5_n8_ncycle200_capped_profiles_all.pkl"
+    pkl_name = "../data_products/010525_a0.5_n8_ncycle200_profiles_all.pkl"
+    pkl_name = "../data_products/010825_a0.5_n8_tchar_profiles_all.pkl"
+    pkl_name = "../data_products/010825_a0.5_n8_ncycle400_capped_profiles_all.pkl"
+    #pkl_name = "../data_products/010825_a0.5_n8_ncycle100_capped_rdepgmax_profiles_all.pkl"
+    #pkl_name = "../data_products/010925_a0.5_b2n26_reconnect_profiles_all.pkl"
 
     plot_dir = "../plots/test"  # common directory
     os.makedirs(plot_dir, exist_ok=True)
@@ -401,7 +396,6 @@ if __name__ == "__main__":
         "Omega",
         "abs_Omega",
     ]  # ["Ldot", "rho", "eta", "Mdot", "b", "K", "beta", "Edot", "u", "T", "abs_u^r", "abs_u^phi", "abs_u^th", "u^r", "u^phi", "u^th", "abs_Omega", "Omega"]
-    #'Etot',
     print(pkl_name)
-    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=3, time_bin_factor=2)
+    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=2, time_bin_factor=1.5, rescale=False)
     # , zone_time_average_fraction=avg_frac, cycles_to_average=cta, color_list=colors, linestyle_list=linestyles, label_list=listOfLabels, rescale=False, rescale_Mdot=True, flatten_rho=flatten_rho, \

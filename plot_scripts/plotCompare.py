@@ -1,9 +1,10 @@
 import glob
 
 from plotProfiles import *
+from plot_utils import *
+from ylabel_dictionary import *
 
-
-def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_dir=None, row=None, figsize=None, xlim=None, passed_fig_ax=None):
+def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_dir=None, row=None, figsize=None, xlim=None, passed_fig_ax=None, tmax=None, rescale=False):
     matplotlib_settings()
 
     if len(quantities) <= 3:
@@ -27,11 +28,11 @@ def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_
         print(dirtag)
         pkl_name = glob.glob("../data_products/" + dirtag + "_profiles_all*.pkl")
         if len(pkl_name) > 1:
-            pdb.set_trace()
-            print("ERROR: found more than 1 pickle file! Take a look at which one you'd like to use.")
+            pkl_name = pkl_name[0]
+            print("ERROR: found more than 1 pickle file! Using this one: " + pkl_name)
         else:
             pkl_name = pkl_name[0]
-        fig_ax = plotProfiles(pkl_name, quantities, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=1, fig_ax=fig_ax, color_list=[colors[i]], label=labels[i], linestyle=linestyles[i])
+        fig_ax = plotProfiles(pkl_name, quantities, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=1, fig_ax=fig_ax, color_list=[colors[i]], label=labels[i], linestyle=linestyles[i], tmax=tmax, rescale=rescale)
 
     if xlim is not None:
         ax1d = fig_ax[1].reshape(-1)
@@ -75,7 +76,7 @@ def compareN4Beta():
 
     xlim = (2, 3e4)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim)
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, rescale=True)
 
 
 def compareSpin(a=0.5):
@@ -122,21 +123,124 @@ def compareSpin(a=0.5):
         labelList = ["oz", "mz", "mz_bflux0", "mz_slide", "mz_rot", "mz_rdepgmax", "mz_sigmadown", "mz_bfluxc", "mz_bfluxc_cons"]  # , "mz_bfluxc_50"]  # _final', 'mz', 'mz_bfluxc',  'mz_nolongtin']
         plot_dir = "../plots/081224_spin_" + str(a)
 
-    quantityList = ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "u^r", "Omega"]
+    quantityList = ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "u^r", "T"] #"Omega"
     if a == None:
         rEH = 2  # just use a=0 rEH
     else:
-        rEH = 1.0 + np.sqrt(1.0 - a**2)  # TODO: calculation as a fxn of a
+        rEH = calc_rEH(a)
     xlim = (rEH, 3e4)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList)
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=None, rescale=True) # tmax 4e5
 
+def compareSpinTimeAverages(quantity='phib', tmax=None, average_factor=2, show_RN22=False):
+    matplotlib_settings()
+    dirtagList = [
+        "100724_a0.0_n4",
+        "100724_a0.1_n4",
+        "100724_a0.3_n4",
+        "100724_a0.5_n4",
+        "100724_a0.7_n4",
+        "100724_a0.9_n4",
+        "2023/122723_n4_onezone_wks0.04/00000",
+        "100724_a0.5_oz",
+    ]
+    
+    if quantity == 'eta' or quantity == 'phib':
+        store_Mdot10 = True
+        
+    fig, ax = plt.subplots(1, 1, figsize=(8,6))
+    labels = ['mz', 'oz']
+    for i, dirtag in enumerate(dirtagList):
+        print(dirtag)
+        pkl_name = glob.glob("../data_products/" + dirtag + "_profiles_all.pkl")
+        pkl_name = pkl_name[0]
+        with open(pkl_name, 'rb') as openFile:
+            D = pickle.load(openFile)
+            a = get_spin(D)
+            rEH = calc_rEH(a)
+            if quantity == 'phib':
+                quantity_arr, _ = readTimeSeries(D, 'Phib', rEH, tmax=tmax)
+            elif quantity == 'eta':
+                radius = 10
+                Mdot, _ = readTimeSeries(D, 'Mdot', radius, tmax=tmax)
+                Edot, _ = readTimeSeries(D, 'Edot', radius, tmax=tmax)
+                quantity_arr = Mdot - Edot
+            mean = np.mean(quantity_arr[int(float(len(quantity_arr))/average_factor):])
+            if store_Mdot10:
+                Mdot_save, _ = readTimeSeries(D, "Mdot", 10, tmax=tmax)
+                Mdot_save = np.mean(Mdot_save[int(float(len(Mdot_save))/average_factor):])# TODO: make it a function
+            if quantity == 'phib':
+                mean /= np.sqrt(Mdot_save)
+            elif quantity == 'eta':
+                mean /= Mdot_save
+            print("spin of", a, "gets", quantity, "of ", mean)
+            is_onezone = (D["dump"]["driver/type"] != "multizone")
+            if is_onezone: marker = 'ko'
+            else: marker = 'kx'
+            ax.plot(a, mean, marker, label = labels[is_onezone], ms=10)
+            if show_RN22 and quantity == 'eta':
+                phib, _ = readTimeSeries(D, 'Phib', rEH, tmax=tmax)
+                phib /= np.sqrt(Mdot_save)
+                mean_phib = np.mean(phib[int(float(len(phib))/average_factor):])
+                print(mean_phib)
+                if labels[is_onezone] != '__nolegend__': label = r"$\eta_{BZ6}(\phi($"+labels[is_onezone]+"))"
+                else: label = '__nolegend__'
+                ax.plot(a, eta_BZ6(a,mean_phib), marker.replace('k','b'), alpha=0.5, ms=10, label=label)
+            if labels[is_onezone] != '__nolegend__': labels[is_onezone] = '__nolegend__'
+
+    # show RN22 results
+    if show_RN22:
+        if quantity == 'phib':
+            a_arr = np.linspace(-1,1,100)
+            phi_fit = -20.2 * np.power(a_arr, 3.) - 14.9 * np.power(a_arr, 2.) + 34. * a_arr + 52.6
+            ax.plot(a_arr, phi_fit, 'b--', label='RN22')
+            ax.plot(a_arr, phi_fit - 15, 'b:', label='RN22 - 15')
+
+    # formatting
+    ax.legend()
+    ax.set_xlabel(r'$a_*$')
+    ylabel = variableToLabel(quantity)
+    ax.set_ylabel(ylabel)
+    #ax.set_xlim([0,1])
+    if quantity == 'phib':
+        ax.set_ylim([0,70])
+
+    # save plot
+    plot_dir = "../plots/"
+    output = "../plots/compare_spin_time_averages_" + str(quantity)  + ".png"
+    plt.savefig(output, bbox_inches="tight")
+    plt.close()
+    print("saved to " + output)
+
+def comparePrescriptions(a=0.5):
+    dirtagList = [  
+        "100724_a0.5_oz",
+        "123024_a0.5_oz_reconnect",
+        "010225_a0.5_oz_rdepgmax5"
+    ]
+    colorList = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList)))  # colors for each runs
+    labelList = ["fid", "reconnect", "rdepgmax"]
+    linestyleList = ["solid"] * (len(dirtagList))
+    plot_dir = "../plots/010225_prescriptions"
+
+    quantityList = ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "u^r", "T"] #"Omega"
+    if a == None:
+        rEH = 2  # just use a=0 rEH
+    else:
+        rEH = calc_rEH(a)
+    xlim = (rEH, 3e4)
+
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=4e5, rescale=True) # tmax 4e5
 
 def _main():
     # compareFvcVsOld()
-    # compareN4Beta()
-    compareSpin(None)
+    #compareN4Beta()
+    #compareSpin(None)
+    comparePrescriptions()
 
+    #tmax=4.5e5 #None #
+    #compareSpinTimeAverages('phib', show_RN22=True, tmax=tmax, average_factor=1.5)
+    #compareSpinTimeAverages('eta', show_RN22=True, tmax=tmax, average_factor=1.5)
 
 if __name__ == "__main__":
     _main()
