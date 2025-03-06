@@ -100,7 +100,7 @@ def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "
     # zone-independent information from h5py
     f = h5py.File(allFiles[0], "r")
     dump = pyharm.load_dump(allFiles[0])
-    oz = (dump["driver/type"] == "kharma")
+    oz = dump["driver/type"] == "kharma"
     if oz:
         nzones = 1
         nzones_eff = 1
