@@ -15,6 +15,7 @@ def get_mask(dictionary):
     n_zones_eff = dictionary["nzones_eff"]
     active_range = dictionary["active_range"]
     radii = dictionary["radii"]
+    ncycle_per_zone = dictionary["ncycle_per_zone"]
     n_radii = len(radii)
 
     # figure out the base resolution
@@ -23,29 +24,39 @@ def get_mask(dictionary):
     x1_in = np.log10(radii[0]) - dx1 / 2.0
     res = int(round(len(radii) / (x1_out - x1_in) * np.log10(base**2)))  # resolution
     overlap = res // 4
+    low_cadence = (ncycle_per_zone > 0) and (ncycle_per_zone < 100)
 
     mask = []
     for zone in range(n_zones_eff):
         mask_temp = np.full(n_radii, True, dtype=bool)
-        mask_temp[radii < active_range[zone][0]] = False
-        mask_temp[radii > active_range[zone][1]] = False
+        if active_range[zone] is not None:
+            mask_temp[radii < active_range[zone][0]] = False
+            mask_temp[radii > active_range[zone][1]] = False
 
         # mask the overlap region
-        if n_zones_eff > 1:
-            active = np.argwhere(mask_temp)[:, 0]
+        active = np.argwhere(mask_temp)[:, 0]
+        if n_zones_eff > 1 and len(active) > 0:
             if zone > 0:
                 mask_temp[: active[0] + overlap] = False
-            if zone < n_zones_eff - 1:
+            if zone < n_zones_eff - 1 and not low_cadence:
                 mask_temp[active[-1] + 1 - overlap :] = False
         mask += [mask_temp]
 
         # further check if there is still an overlap, if there is, prioritize smaller ann first
-        if zone > 0:
+        if 0: #zone > 0:
             zone_temp = zone - 1
+            #if len(radii[mask[zone_temp]]) > 0 and zone_temp >= 0:
             while len(radii[mask[zone_temp]]) > 0 and zone_temp >= 0:
-                rout_smaller_ann = np.power(10.0, np.log10(radii[mask[zone - 1]][-1]) + dx1 / 2.0)
+                rout_smaller_ann = np.power(10.0, np.log10(radii[mask[zone_temp]][-1]) + dx1 / 2.0)
                 zone_temp -= 1
             still_overlaps = radii <= rout_smaller_ann
+            mask[zone][still_overlaps] = False
+        
+    if 1:
+        # or, prioritize larger ann first
+        for zone in range(n_zones_eff - 1):
+            rin_larger_ann = np.power(10.0, np.log10(radii[mask[zone + 1]][0]) - dx1 / 2.0)
+            still_overlaps = radii >= rin_larger_ann
             mask[zone][still_overlaps] = False
 
     return mask
@@ -161,7 +172,8 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
         avgedProfiles_rho, invert = timeAvgPerBin(dictionary, tDivList, binNumList, "rho", perzone_avg_frac=perzone_avg_frac)
         for b in range(num_time_chunk):
             for zone in range(n_zones_eff):
-                avgedProfiles[zone][b] = avgedProfiles_Mdot[zone][b] / (avgedProfiles_rho[zone][b] * (4.0 * np.pi * radii**2))
+                if len(avgedProfiles_Mdot[zone][b]) > 0:
+                    avgedProfiles[zone][b] = avgedProfiles_Mdot[zone][b] / (avgedProfiles_rho[zone][b] * (4.0 * np.pi * radii**2))
     elif quantity == 'phib':
         avgedProfiles_Phib, invert = timeAvgPerBin(dictionary, tDivList, binNumList, "Phib", perzone_avg_frac=perzone_avg_frac)
         for b in range(num_time_chunk):
@@ -279,6 +291,13 @@ def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, label=None, l
     #            plt.loglog(radii[mask], profile[zone][b][mask])
     ax.legend()
 
+def plotIC(ax, dictionary, quantity):
+    radii = dictionary["radii"]
+    profile, invert = readQuantity(dictionary, quantity)
+    init_profile = profile[0]
+    if invert: init_profile = 1. / init_profile
+    valid_radii = radii > 2
+    ax.plot(radii[valid_radii], init_profile[valid_radii], 'k:', lw=1)
 
 def plotProfiles(
     pkl_name,
@@ -293,6 +312,7 @@ def plotProfiles(
     flip_sign=False,
     show_divisions=True,
     show_rb=False,
+    show_init=False,
     perzone_avg_frac=0.5,
     num_time_chunk=4,
     time_bin_factor=2,
@@ -327,6 +347,9 @@ def plotProfiles(
 
         plotProfileQuantity(ax, radii, profiles, tDivList, colors=color_list, label=label, linestyle=linestyle)
 
+        if show_init and (quantity == "rho" or quantity == "T" or quantity=="beta" or quantity=='u^r'):
+            plotIC(ax, D, quantity)
+
         # Formatting
         if formatting:
             ax.set_xlabel("Radius [$r_g$]")
@@ -359,6 +382,8 @@ def plotProfiles(
 
 
 if __name__ == "__main__":
+    #pkl_name="../data_products/112524_fastervc_a0.5_b2n14/test_combine_in_profiles_all.pkl"
+    #pkl_name="../data_products/112524_fastervc_a0.5_b8n4_profiles_all.pkl"
     #pkl_name = "../data_products/100724_a0.5_n8/high_cadence_profiles_all.pkl"  #
     #pkl_name = "../data_products/111524_a0.5_torus_profiles_all.pkl"
     pkl_name = "../data_products/111524_a0.5_oz_128_profiles_all.pkl"
@@ -371,12 +396,60 @@ if __name__ == "__main__":
     pkl_name = "../data_products/123024_a0.5_oz_reconnect_profiles_all.pkl"
     pkl_name = "../data_products/123124_a0.5_oz_rdepgmax_profiles_all.pkl"
     pkl_name = "../data_products/010225_a0.5_oz_rdepgmax5_profiles_all.pkl"
-    pkl_name = "../data_products/010625_a0.5_n8_ncycle200_capped_profiles_all.pkl"
     pkl_name = "../data_products/010525_a0.5_n8_ncycle200_profiles_all.pkl"
-    pkl_name = "../data_products/010825_a0.5_n8_tchar_profiles_all.pkl"
+    pkl_name = "../data_products/010625_a0.5_n8_ncycle200_capped_profiles_all.pkl"
+    pkl_name = "../data_products/010625_a0.5_oz_128_profiles_all.pkl"
+    #pkl_name = "../data_products/010825_a0.5_n8_tchar_profiles_all.pkl"
     pkl_name = "../data_products/010825_a0.5_n8_ncycle400_capped_profiles_all.pkl"
-    #pkl_name = "../data_products/010825_a0.5_n8_ncycle100_capped_rdepgmax_profiles_all.pkl"
     #pkl_name = "../data_products/010925_a0.5_b2n26_reconnect_profiles_all.pkl"
+    pkl_name = "../data_products/010625_a0.5_oz_128_profiles_all.pkl"
+    #pkl_name = "../data_products/010925_a0.9_oz_128_profiles_all.pkl"
+    #pkl_name = "../data_products/011225_a0.5_b2n26_ncycle10_reconnect_profiles_all.pkl"
+    #pkl_name = "../data_products/011225_a0.5_n8_ncycle50_profiles_all.pkl"
+    #pkl_name = "../data_products/011225_a0.5_b2n26_ncycle10/debug_kastaun_profiles_all.pkl"
+    #pkl_name = "../data_products/011425_a0.5_b2n26_ncycle10_betafloor_profiles_all.pkl"
+    #pkl_name = "../data_products/011525_a0.5_b2n26_ncycle2_betafloor_profiles_all.pkl"
+    #pkl_name = "../data_products/012125_a0.5_noncapped_profiles_all.pkl"
+    #pkl_name = "../data_products/012325_a0.5_ncycle100_profiles_all.pkl"
+    #pkl_name = "../data_products/012725_a0.5_extg_tempmax_profiles_all.pkl"
+    #pkl_name = "../data_products/012825_a0.5_extg_tempmax_cap1e6_profiles_all.pkl"
+    #pkl_name = "../data_products/012925_a0.5_extg_kastaun_cap2e6_profiles_all.pkl"
+    #pkl_name = "../data_products/020325_a0.5_96_profiles_all.pkl"
+    #pkl_name = "../data_products/020325_a0.5_beta1000_profiles_all.pkl"
+    #pkl_name = "../data_products/020625_a0.5_tmax_beyond_1e6_profiles_all.pkl"
+    #pkl_name = "../data_products/021025_a0.5_tmax_normal_profiles_all.pkl"
+    #pkl_name = "../data_products/021125_a0.0_b2n26_profiles_all.pkl"
+    #pkl_name = "../data_products/021125_a0.5_rcool3e5_profiles_all.pkl"
+    #pkl_name = "../data_products/021225_a0.5_lin_profiles_all.pkl"
+    #pkl_name = "../data_products/021225_a0.5_rB1e6_profiles_all.pkl"
+    #pkl_name = "../data_products/021225_a0.5_fofc_profiles_all.pkl"
+    pkl_name = "../data_products/021325_a0.5_n8_profiles_all.pkl"
+    #pkl_name = "../data_products/021325_a0.0_011424_profiles_all.pkl"
+    #pkl_name = "../data_products/021425_a0.5_rB1e6_reconnect_profiles_all.pkl"
+    #pkl_name = "../data_products/021825_a0.5_rB1e6_reconnect_nocool_profiles_all.pkl"
+    #pkl_name = "../data_products/021925_a0.5_rB1e6/withbetaflr_profiles_all.pkl"
+    #pkl_name = "../data_products/021925_a0.0_b2n26_profiles_all.pkl"
+    #pkl_name = "../data_products/022025_a0.5_n8_nc40_profiles_all.pkl"
+    pkl_name = "../data_products/022425_a0.0_n8_ncycle8000_profiles_all.pkl"
+    #pkl_name = "../data_products/022425_a0.0_b2_tchar_profiles_all.pkl"
+    #pkl_name = "../data_products/022525_a0.5_b8n4_profiles_all.pkl"
+    #pkl_name = "../data_products/022525_a0.5_b2n14_profiles_all.pkl"
+    #pkl_name = "../data_products/022625_a0.5_b2n14_tchar_profiles_all.pkl"
+    pkl_name = "../data_products/022625_a0.0_n8_normal_profiles_all.pkl"
+    pkl_name = "../data_products/022625_a0.5_safe_profiles_all.pkl"
+    #pkl_name = "../data_products/022625_a0.9_n4_profiles_all.pkl"
+    pkl_name = "../data_products/022725_a0.0_safe_tchar_profiles_all.pkl"
+    #pkl_name = "../data_products/022825_a0.5_n8_rdepgmax_profiles_all.pkl"
+    #pkl_name = "../data_products/030225_a0.0_b2_tchar_normal1dw_profiles_all.pkl"
+    #pkl_name = "../data_products/030325_a0.5_rdepgmax_nodelrhocap_profiles_all.pkl"
+    #pkl_name = "../data_products/030325_a0.0_safe_tchar_profiles_all.pkl"
+    pkl_name = "../data_products/030325_a0.9_oz_128_profiles_all.pkl"
+    #pkl_name = "../data_products/delta/110624_a0.0_oz_128_profiles_all.pkl"
+    pkl_name = "../data_products/030425_a0.5_rdepgmax5_profiles_all.pkl"
+    #pkl_name = "../data_products/030425_a0.5_safe_longtin20_profiles_all.pkl"
+    pkl_name = "../data_products/030425_a0.5_b8n4_safe_longtin10_profiles_all.pkl"
+    #pkl_name = "../data_products/030425_a0.9_b8n4_safe_profiles_all.pkl"
+    pkl_name = "../data_products/030425_a0.0_b2n14_safe_profiles_all.pkl"
 
     plot_dir = "../plots/test"  # common directory
     os.makedirs(plot_dir, exist_ok=True)
@@ -397,5 +470,4 @@ if __name__ == "__main__":
         "abs_Omega",
     ]  # ["Ldot", "rho", "eta", "Mdot", "b", "K", "beta", "Edot", "u", "T", "abs_u^r", "abs_u^phi", "abs_u^th", "u^r", "u^phi", "u^th", "abs_Omega", "Omega"]
     print(pkl_name)
-    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=2, time_bin_factor=1.5, rescale=False)
-    # , zone_time_average_fraction=avg_frac, cycles_to_average=cta, color_list=colors, linestyle_list=linestyles, label_list=listOfLabels, rescale=False, rescale_Mdot=True, flatten_rho=flatten_rho, \
+    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=1, num_time_chunk=3, time_bin_factor=2, rescale=False, show_init=True)

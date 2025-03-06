@@ -1,5 +1,6 @@
 import numpy as np
 import pdb
+import pickle
 
 def calc_rEH(a):
     return 1.0 + np.sqrt(1.0 - a**2)
@@ -67,3 +68,11 @@ def readTimeSeries(D, quantity='eta', radius=100, tmax=None):
         if times[-1] <= tmax: print("the time series not reached tmax of {:.3g} yet".format(tmax))
         i_keep = (times < tmax)
         return quantity_arr[i_keep], times[i_keep]
+
+def plot_shell_summed(ax,dump,x,var,color='k',lw=5,j_slice=slice(None), label=None, alpha=1):
+    var = np.squeeze(np.sum((var * dump['gdet'] * dump['dx2'] * dump['dx3'])[:,j_slice,:],axis=(1,2)))
+    
+    if label is None: label="__nolegend__"
+    ax.plot(x, var, color=color,  lw=lw, label=label, alpha=alpha)
+    ax.plot(x, -var, color=color, lw=lw, ls=':', alpha=alpha)
+    return var
