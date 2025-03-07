@@ -1,6 +1,7 @@
 import glob
 
 from plotProfiles import *
+import oldplotProfiles as old_script
 from plot_utils import *
 from ylabel_dictionary import *
 
@@ -25,6 +26,7 @@ def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_
         fig_ax = passed_fig_ax
 
     for i, dirtag in enumerate(dirtags):
+        use_old = False
         print(dirtag)
         pkl_name = glob.glob("../data_products/" + dirtag + "_profiles_all*.pkl")
         if len(pkl_name) > 1:
@@ -32,7 +34,16 @@ def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_
             print("ERROR: found more than 1 pickle file! Using this one: " + pkl_name)
         else:
             pkl_name = pkl_name[0]
-        fig_ax = plotProfiles(pkl_name, quantities, plot_dir=plot_dir, perzone_avg_frac=0.5, num_time_chunk=1, fig_ax=fig_ax, color_list=[colors[i]], label=labels[i], linestyle=linestyles[i], tmax=tmax, rescale=rescale)
+        if "kharma_multizone_analysis" in pkl_name:
+            use_old = True
+        if use_old:
+            fig, axes = fig_ax
+            ax1d = axes.reshape(-1)
+            for j, quantity in enumerate(quantities):
+                fig, ax1d[j] = old_script.plotProfiles([pkl_name], quantity, zone_time_average_fraction=0.5, cycles_to_average=0, fig_ax=(fig, ax1d[j]), num_time_chunk=1, color_list=[colors[i]], label_list=[labels[i]])
+            fig_ax = (fig, axes)
+        else:
+            fig_ax = plotProfiles(pkl_name, quantities, plot_dir=plot_dir, perzone_avg_frac=1, num_time_chunk=1, fig_ax=fig_ax, color_list=[colors[i]], label=labels[i], linestyle=linestyles[i], tmax=tmax, rescale=rescale)
 
     if xlim is not None:
         ax1d = fig_ax[1].reshape(-1)
@@ -84,12 +95,18 @@ def compareSpin(a=0.5):
     if a == None:
         # compare between different spins
         dirtagList = [  # TODO: include oz from old multizone
-            "100724_a0.0_n4",
-            "100724_a0.1_n4",
-            "100724_a0.3_n4",
-            "100724_a0.5_n4",
-            "100724_a0.7_n4",
-            "100724_a0.9_n4",
+            #"100724_a0.0_n4",
+            #"100724_a0.1_n4",
+            #"100724_a0.3_n4",
+            #"100724_a0.5_n4",
+            #"100724_a0.7_n4",
+            #"100724_a0.9_n4",
+            "030425_a0.0_b8n4_safe",
+            "030425_a0.1_b8n4_safe",
+            "030425_a0.3_b8n4_safe",
+            "030425_a0.5_b8n4_safe_longtin10",
+            "030425_a0.7_b8n4_safe",
+            "030425_a0.9_b8n4_safe",
             "2023/122723_n4_onezone_wks0.04/00000",
             "100724_a0.5_oz",
         ]
@@ -97,7 +114,7 @@ def compareSpin(a=0.5):
         colorList = np.append(colorList, [colorList[0], colorList[3]], axis=0)  # for onezones
         labelList = ["0", "0.1", "0.3", "0.5", "0.7", "0.9", "0.0_oz", "0.5_oz"]
         linestyleList = ["solid"] * (len(dirtagList) - 2) + ["dashed"] * 2
-        plot_dir = "../plots/101624_different_spin"
+        plot_dir = "../plots/030525_different_spin"
     if a == 0.5:
         dirtagList = [
             # "081524_a0.5_oz", # replace to 0909
@@ -213,15 +230,31 @@ def compareSpinTimeAverages(quantity='phib', tmax=None, average_factor=2, show_R
     print("saved to " + output)
 
 def comparePrescriptions(a=0.5):
-    dirtagList = [  
-        "100724_a0.5_oz",
-        "123024_a0.5_oz_reconnect",
-        "010225_a0.5_oz_rdepgmax5"
-    ]
+    if a == 0.5:
+        dirtagList = [  
+            #"100724_a0.5_oz",
+            "010625_a0.5_oz_128",
+            #"030325_a0.5_b8n4_safe",
+            #"022825_a0.5_b8n4_tchar",
+            #"022525_a0.5_b8n4",
+            "030325_a0.5_b2n14_safe",
+            "022625_a0.5_b2n14_tchar",
+            "022525_a0.5_b2n14",
+            #"123024_a0.5_oz_reconnect",
+            #"010225_a0.5_oz_rdepgmax5"
+        ]
+        labelList = ["oz_128", "b2_safe", "b2", "b2_n10"] #"reconnect", "b8_safe", "b8", "b8_n200", 
+    elif a == 0.9:
+        dirtagList = [  
+            "010925_a0.9_oz_128",
+            "022625_a0.9_n4_noreconnect",
+            "022625_a0.9_n4"
+        ]
+        labelList = ["128", "b8_noreconnect", "b8"] #"reconnect", 
+
     colorList = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList)))  # colors for each runs
-    labelList = ["fid", "reconnect", "rdepgmax"]
     linestyleList = ["solid"] * (len(dirtagList))
-    plot_dir = "../plots/010225_prescriptions"
+    plot_dir = "../plots/022625_prescriptions_a"+str(a)
 
     quantityList = ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "u^r", "T"] #"Omega"
     if a == None:
@@ -230,13 +263,37 @@ def comparePrescriptions(a=0.5):
         rEH = calc_rEH(a)
     xlim = (rEH, 3e4)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=4e5, rescale=True) # tmax 4e5
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=3e5, rescale=True) # tmax 4e5
+
+def compareN8OldVsNew():
+    dirtagList = [
+        "../../kharma_multizone_analysis/data_products/2023/082423_n8",
+        "../../kharma_multizone_analysis/data_products/2023/110223_mhd_wks",
+        "../../kharma_multizone_analysis/data_products/production_runs/072823_beta01_128",
+        "../../kharma_multizone_analysis/data_products/011424_n8_locff_smth0.03",
+        #"../../kharma_multizone_analysis/data_products/022124_n8_longtin0.5",
+        #"../../kharma_multizone_analysis/data_products/022124_n8_longtin1",
+        "../../kharma_multizone_analysis/data_products/022124_n8_longtin2",
+        "022725_a0.0_safe_tchar",
+        "030325_a0.0_safe_tchar",
+    ]
+    labelList = ["cell_082423", "cell_110223", "cell_128", "cell_011424", "cell_022124_4", "face_safe", "face_safe_longtin20"] #"reconnect", "b8_safe", "b8", "b8_n200", 
+    colorList = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList)))  # colors for each runs
+    linestyleList = ["solid"] * (len(dirtagList))
+    plot_dir = "../plots/030525_n8a0oldvsnew"
+
+    quantityList = ['Mdot', 'eta'] #["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "u^r", "T"] #"Omega"
+    rEH = 2  # just use a=0 rEH
+    xlim = (rEH, 1e8)
+
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=None, rescale=False)
 
 def _main():
     # compareFvcVsOld()
     #compareN4Beta()
     #compareSpin(None)
-    comparePrescriptions()
+    compareN8OldVsNew()
+    #comparePrescriptions() #0.9)
 
     #tmax=4.5e5 #None #
     #compareSpinTimeAverages('phib', show_RN22=True, tmax=tmax, average_factor=1.5)
