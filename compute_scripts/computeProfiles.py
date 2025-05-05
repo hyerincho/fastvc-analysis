@@ -38,7 +38,7 @@ def shellAverage(dump, quantity, imin=0, density_weight=True, pole_pad=1):
         return 0.5 * pyharm.shell_sum(dump, "abs_B1") * np.sqrt(4.0 * np.pi)
     elif quantity == "Etot":
         return pyharm.shell_sum(dump, "JE0")
-    if quantity == "Ldot":
+    elif quantity == "Ldot":
         return pyharm.shell_sum(dump, "FL")
 
     ## quantities to be averaged over all theta except near the poles
@@ -59,12 +59,22 @@ def shellAverage(dump, quantity, imin=0, density_weight=True, pole_pad=1):
     if dump["n3"] > 1:  # 3d
         if pole_pad > 1:
             print("using pole_pad ", pole_pad)
-        return np.sum((to_average * volumetric_weight * density)[imin:, pole_pad:-pole_pad, :], axis=(1, 2)) / np.sum((volumetric_weight * density)[imin:, pole_pad:-pole_pad, :], axis=(1, 2))
+        return np.sum(
+            (to_average * volumetric_weight * density)[imin:, pole_pad:-pole_pad, :], axis=(1, 2)
+        ) / np.sum((volumetric_weight * density)[imin:, pole_pad:-pole_pad, :], axis=(1, 2))
     else:
-        return np.sum(to_average[imin:, :] * volumetric_weight * density, axis=1) / np.sum(volumetric_weight * density, axis=1)
+        return np.sum(to_average[imin:, :] * volumetric_weight * density, axis=1) / np.sum(
+            volumetric_weight * density, axis=1
+        )
 
 
-def computeProfileSet(dump, quantities=["Mdot", "rho", "u", "T", "u^r", "u^phi"], imin=0, density_weight=True, pole_pad=1):
+def computeProfileSet(
+    dump,
+    quantities=["Mdot", "rho", "u", "T", "u^r", "u^phi"],
+    imin=0,
+    density_weight=True,
+    pole_pad=1,
+):
     """
     Open one dump, then compute various profiles from it.  Return a list of profiles.
     """
@@ -73,14 +83,23 @@ def computeProfileSet(dump, quantities=["Mdot", "rho", "u", "T", "u^r", "u^phi"]
     for quantity in quantities:
         print(f"   {quantity}")
         try:
-            output.append(shellAverage(dump, quantity, imin=imin, density_weight=density_weight, pole_pad=pole_pad))
+            output.append(
+                shellAverage(
+                    dump, quantity, imin=imin, density_weight=density_weight, pole_pad=pole_pad
+                )
+            )
         except:
             continue
 
     return output
 
 
-def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "T", "u^r", "u^phi"], density_weight=True):
+def computeAllProfiles(
+    runName,
+    outPickleName,
+    quantities=["Mdot", "rho", "u", "T", "u^r", "u^phi"],
+    density_weight=True,
+):
     """
     Loop through every file of a given run.  Compute profiles, then save a dictionary to a pickle.
     """
@@ -153,7 +172,9 @@ def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "
         # check the assumption
         dump = pyharm.load_dump(allFiles[num_saved - 1])
         if listOfCycles[-1] != dump["n_step"]:
-            print("WARNING! There has been a change of list of output dumps! Please check the list of dumps again.")
+            print(
+                "WARNING! There has been a change of list of output dumps! Please check the list of dumps again."
+            )
             return
         print("Calculation exists and starting from dump # {}".format(num_saved))
 
@@ -174,7 +195,9 @@ def computeAllProfiles(runName, outPickleName, quantities=["Mdot", "rho", "u", "
             n0_zone = f["Params"].attrs["Multizone/n0_zone"]
             t0_zone = f["Params"].attrs["Multizone/t0_zone"]
 
-        listOfProfiles.append(computeProfileSet(dump, quantities=quantities, density_weight=density_weight))
+        listOfProfiles.append(
+            computeProfileSet(dump, quantities=quantities, density_weight=density_weight)
+        )
         listOfTimes.append(dump["t"])
         listOfCycles.append(dump["n_step"])
         listOfZones.append(i_zone)

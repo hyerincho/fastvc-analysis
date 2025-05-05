@@ -1,6 +1,7 @@
 import numpy as np
 import pdb
 import pickle
+import matplotlib.pyplot as plt
 
 
 def calc_rEH(a):
@@ -19,13 +20,13 @@ def get_spin(D, verbose=False):
     return a
 
 
-def eta_BZ6(a, phib):
+def eta_BZ6(a, phib, kappa=0.03):
     # kappa = 0.053 # split-monopole
     # kappa = 0.044 # parabolic
-    kappa = 0.03
+    # kappa = 0.03
     rEH = calc_rEH(a)
     Omega = a / (2 * rEH)
-    return kappa * (4.0 * np.pi) * np.power(phib * Omega, 2.0) * (1.0 + 1.38 * Omega**2 - 9.2 * Omega**4) / 100  # from percentage to decimals
+    return 0.01 * kappa * (4.0 * np.pi) * np.power(phib * Omega, 2.0) * (1.0 + 1.38 * Omega**2 - 9.2 * Omega**4)  # from percentage to decimals
 
 
 def readQuantity(dictionary, quantity):
@@ -85,3 +86,47 @@ def plot_shell_summed(ax, dump, x, var, color="k", lw=5, j_slice=slice(None), la
     ax.plot(x, var, color=color, lw=lw, label=label, alpha=alpha)
     ax.plot(x, -var, color=color, lw=lw, ls=":", alpha=alpha)
     return var
+
+
+def extractQuantity(D, quantity, average_factor=2.0):
+    store_Mdot10 = False
+    if quantity == "eta" or quantity == "phib":
+        store_Mdot10 = True
+
+    if quantity == "eta":
+        radius = 5
+        quantity_arr, _ = readTimeSeries(D, "Edot", radius)
+        quantity_arr2, _ = readTimeSeries(D, "Mdot", radius)
+    elif quantity == "eta_EM":
+        radius = 5
+        quantity_arr, _ = readTimeSeries(D, "Edot_EM", radius)
+        quantity_arr2, _ = readTimeSeries(D, "Mdot", radius)
+    elif quantity == "phib":
+        try:
+            a = get_spin(D)
+        except:
+            a = 0.5
+            print("ERROR: cant find spin, now using a=0.5")
+        rEH = calc_rEH(a)
+        quantity_arr, _ = readTimeSeries(D, "Phib", rEH)
+    else:
+        radius = 5
+        quantity_arr, _ = readTimeSeries(D, quantity, radius)
+
+    if store_Mdot10:
+        Mdot_save, _ = readTimeSeries(D, "Mdot", 10)
+    innermost = np.array(D["zones"]) == 0  # <= 1 #
+
+    if store_Mdot10:  # 0: # divide by the time dependent Mdot  #
+        Mdot_save = Mdot_save[innermost]
+        Mdot_save = np.mean(Mdot_save[int(float(len(Mdot_save)) / average_factor) :])  # TODO: change this to time criterion by getting indices over t_half
+    if quantity == "eta":
+        quantity_arr = (quantity_arr2 - quantity_arr) / Mdot_save
+    elif quantity == "eta_EM":
+        quantity_arr = (-quantity_arr) / Mdot_save
+    elif quantity == "phib":
+        quantity_arr /= np.sqrt(Mdot_save)
+
+    quantity_arr = quantity_arr[innermost]
+    mean = np.mean(quantity_arr[int(float(len(quantity_arr)) / average_factor) :])
+    return mean

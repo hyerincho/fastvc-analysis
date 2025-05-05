@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pyharm
 import glob
+import h5py
+import pdb
 
 from matplotlib_settings import *
 
@@ -100,16 +102,73 @@ def Gamma(dump, ax_passed=None):
         return ax
 
 
+def timestep(dirtag, num_files=10, ax_passed=None, color="k", label="__nolegend__"):
+    if ax_passed is None:
+        matplotlib_settings()
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    else:
+        ax = ax_passed
+
+    files = sorted(glob.glob("../data/" + dirtag + "/*.out0*.phdf"))
+    files = files[::-1]
+    for fname in files[:num_files]:
+        f = h5py.File(fname, "r")
+        r = f["Params"].attrs["Multizone/active_rin"]
+        dt = f["Info"].attrs["dt"]
+
+        ax.plot(r, dt, color=color, marker=".", label=label)
+        if label != "__nolegend__":
+            label = "__nolegend__"
+
+    # ax.legend()
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel(pyharm.pretty("r"))
+    ax.set_ylabel(r"$dt$")
+    ax.legend()
+    if ax_passed is None:
+        output = "../plots/timestep.png"
+        plt.savefig(output, bbox_inches="tight")
+        plt.close()
+        print("saved to " + output)
+    else:
+        return ax
+
+
 if __name__ == "__main__":
     dirname = "021425_a0.5_rB1e6_reconnect"
     dirname = "021825_a0.5_rB1e6_reconnect_nocool_hse"
     dirname = "022625_a0.5_safe"
     dirname = "022825_a0.5_n8_rdepgmax"
-    fnum = 30  # 60 #2000 #5000
+    dirname = "030425_a0.5_rdepgmax5"
+    dirname = "041625_n4_a0.9_toriilike_jks2_smth5_reconnect"
+    fnum = 57  # 450  # 2000 #5000
     fname = glob.glob("../data/" + dirname + "/*.out0.{:05d}.phdf".format(fnum))[0]
     # fname = sorted(glob.glob("../data/"+dirname+"/*.out0.{:05d}.phdf".format(fnum)))[-1]
 
+    dirtags = [
+        "032125_n4a0.9_toriilike",
+        "041625_n4_a0.9_toriilike_jks2_reconnect",
+        "041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
+        "041625_n4_a0.9_toriilike_jks2_smth3_reconnect",
+        "041625_n4_a0.9_toriilike_jks2_smth5_reconnect",
+    ]
+    labels = ["eks", "jks1", "2", "3", "5"]
+    dirtags = ["040625_a0.9_rB2e3", "041625_a0.9_rB2e3_jks2", "041625_a0.9_rB2e3_jks2_smth3"]
+    labels = ["eks", "jks1", "3"]
+    dirtags = ["040925_a0.9_fofc_noehbuffer", "041825_a0.9_rB2e5_jks2_smth2", "041725_a0.9_rB2e5_jks2_smth2.5", "042125_a0.9_rB2e5_jks2_smth2.7"]
+    labels = ["eks", "jks2", "2.5", "2.7"]
+    colors = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtags)))
+    matplotlib_settings()
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    for i, dirtag in enumerate(dirtags):
+        timestep(dirtag, 40, ax, colors[i], labels[i])
+    output = "../plots/timestep.png"
+    plt.savefig(output, bbox_inches="tight")
+    plt.close()
+    print("saved to " + output)
+
     dump = pyharm.load_dump(fname, ghost_zones=False)
-    max_velocities(dump)
-    betaGamma(dump, norm_vchar=True)
-    Gamma(dump)
+    # max_velocities(dump)
+    # betaGamma(dump, norm_vchar=True)
+    # Gamma(dump)
