@@ -84,6 +84,7 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
     # list initialization
     sortedProfiles = [[[] for _ in range(num_time_chunk)] for _ in range(n_zones_eff)]  # (n_zones_eff, num_time_chunk) dimension
     avgedProfiles = [[[] for _ in range(num_time_chunk)] for _ in range(n_zones_eff)]  # (n_zones_eff, num_time_chunk) dimension
+    deltBin = [[[] for _ in range(num_time_chunk)] for _ in range(n_zones_eff)]  # (n_zones_eff, num_time_chunk) dimension
 
     # switch criteria
     if switch_on_ncycle:
@@ -92,6 +93,7 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
     else:
         switch_list = times
         switch_pt = set(t0_zone)
+    delt = np.gradient(times)
     switch_pt = sorted(switch_pt) + [switch_list[-1]]
 
     # TODO: (07/29/24) do I need dt weight?
@@ -108,6 +110,7 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
             if switch_pt[switch_num + 1] - switch_list[i] <= (switch_pt[switch_num + 1] - switch_pt[switch_num]) * perzone_avg_frac:
                 # only when it is last (perzone_avg_frac), stage for averaging
                 sortedProfiles[zone_num][bin_num].append(profile)
+                deltBin[zone_num][bin_num].append(delt[i])
 
     for b in range(num_time_chunk):
         for zone in range(n_zones_eff):
@@ -115,7 +118,9 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
                 # empty
                 continue
             else:
-                avgedProfiles[zone][b] = np.mean(sortedProfiles[zone][b], axis=0)
+                #avgedProfiles[zone][b] = np.mean(sortedProfiles[zone][b], axis=0)
+                pdb.set_trace()
+                avgedProfiles[zone][b] = (np.sum(sortedProfiles[zone][b] * deltBin[zone][b], axis=0) / np.sum(deltBin[zone][b])) # trying out delt weighting
 
     return avgedProfiles, invert
 
@@ -447,11 +452,11 @@ if __name__ == "__main__":
     # pkl_name = "../data_products/042125_n4_a0.5_jks2_profiles_all.pkl"
     # pkl_name = "../data_products/042125_a0.9_oz_jks_profiles_all.pkl"
     # pkl_name = "../data_products/042225_n4_a0.9_retrograde_profiles_all.pkl"
-    # pkl_name = "../data_products/042225_n4_a0.9_toriilike_jks2_nocap_profiles_all.pkl"
+    pkl_name = "../data_products/042225_n4_a0.9_toriilike_jks2_nocap_profiles_all.pkl"
     pkl_name = "../data_products/042325_a0.9_rB2e5_bondi_profiles_all.pkl"
     # pkl_name = "../data_products/042325_a0.9_rB2e3_capRB_profiles_all.pkl"
     # pkl_name = "../data_products/042325_n4_a0.9_tl_uphi0_profiles_all.pkl"
-    # pkl_name = "../data_products/042425_a0.0_rB2e5_bondi_jks2_profiles_all.pkl"
+    #pkl_name = "../data_products/042425_a0.0_rB2e5_bondi_jks2_profiles_all.pkl"
     # pkl_name = "../data_products/043025_n4_a0.9_bondi_bflux0_profiles_all.pkl"
 
     plot_dir = "../plots/test"  # common directory
