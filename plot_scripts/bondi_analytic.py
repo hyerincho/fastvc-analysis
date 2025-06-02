@@ -7,7 +7,6 @@ import pdb
 # TODO: make this part a function to determine all constants as a fxn of gam, mdot, rs
 
 gam= 5./3
-mdot=1.
 #rs=np.power(10.,2.5) #16 #
 
 n= 1./(gam-1.)
@@ -15,19 +14,20 @@ n= 1./(gam-1.)
 def get_Tfunc(T,r):
     #result = np.power(1.+(1.+n)*T,2.)*(1.-2.*mdot/r+np.power(C1/(np.power(r,2.)*np.power(T,n)),2))-C2
     utemp=C1/(np.power(r,2.)*np.power(T,n))
-    result = (-2*mdot/r+np.power(utemp,2))+(2.*(1.+n)*T+np.power((1.+n)*T,2))*(1.-2.*mdot/r+np.power(utemp,2))-C2prime
+    result = (-2/r+np.power(utemp,2))+(2.*(1.+n)*T+np.power((1.+n)*T,2))*(1.-2./r+np.power(utemp,2))-C2prime
     return result
 
-def define_globals(rs_in):
-    global rs, C1, C2, C2prime
+def define_globals(rs_in, mdot_in=1.):
+    global rs, mdot, C1, C2, C2prime
     rs=rs_in
-    uc= np.sqrt(mdot/(2.*rs))
+    mdot=mdot_in
+    uc= np.sqrt(1./(2.*rs))
     Vc= -np.sqrt(np.power(uc,2.)/(1.-3.*np.power(uc,2)))
     Tc= -n*np.power(Vc,2)/((n+1)*(n*np.power(Vc,2)-1.))
     C1= uc*np.power(rs,2)*np.power(Tc,n)
-    C2=np.power(1.+(1.+n)*Tc,2.)*(1.-2.*mdot/rs+np.power(C1,2)/(np.power(rs,4)*np.power(Tc,2*n)))
+    C2=np.power(1.+(1.+n)*Tc,2.)*(1.-2./rs+np.power(C1,2)/(np.power(rs,4)*np.power(Tc,2*n)))
     uprime=C1/(np.power(rs,2)*np.power(Tc,n))
-    C2prime=(-2.*mdot/rs+np.power(uprime,2.))+(2.*(1.+n)*Tc+np.power((1.+n)*Tc,2))*(1.-2.*mdot/rs+np.power(uprime,2))
+    C2prime=(-2./rs+np.power(uprime,2.))+(2.*(1.+n)*Tc+np.power((1.+n)*Tc,2))*(1.-2./rs+np.power(uprime,2))
     return rs,C1,C2,C2prime
 
 def get_T(r, ax=None, inflow_sol=True):
@@ -98,11 +98,13 @@ def get_T(r, ax=None, inflow_sol=True):
     #print(r, Tmin, Tmax, Th)
     return Th
 
-def get_quantity_for_rarr(rarr,quantity,rs=np.power(10.,2.5)):
-    define_globals(rs)
+def get_quantity_for_rarr(rarr,quantity,rs=np.power(10.,2.5),mdot=1.):
+    define_globals(rs,mdot)
     Tarr=np.array([get_T(r) for r in rarr])
     #Tarr=np.array([get_T(r,C1,C2,n) for r in rarr])
-    rhoarr=np.power(Tarr,n)
+    if mdot == 1: Kn = 1.
+    else: Kn = 4 * np.pi * C1 / mdot
+    rhoarr=np.power(Tarr,n) / Kn
     if quantity=='T':
         return Tarr
     elif quantity=='rho':
