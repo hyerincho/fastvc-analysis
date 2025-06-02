@@ -6,6 +6,7 @@ import h5py
 import pdb
 
 from matplotlib_settings import *
+from runtime_utils import *
 
 
 def calc_vchar(dump):
@@ -134,6 +135,48 @@ def timestep(dirtag, num_files=10, ax_passed=None, color="k", label="__nolegend_
     else:
         return ax
 
+def compare_speed(dirtags):
+    matplotlib_settings()                 
+    fig,ax = plt.subplots(1,1,figsize=(8,6))
+    oz_save = [None, None]
+    for dirtag in dirtags:
+        logs = sorted(glob.glob("../data/" + dirtag + "/out-*"))
+
+        # get rB
+        fname_dump = glob.glob('/'.join(logs[0].split('/')[:-1] + ['*out0.00000.phdf']))[0]
+        dump = pyharm.load_dump(fname_dump,ghost_zones=False)
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=dump["rs"])[0]
+        is_onezone = dump["driver/type"] == "kharma"
+        for fname in logs[::-1]:
+            wt, t = read_runtime(fname)
+            t /= np.power(rB, 3./2)
+            wt = (wt * u.s).to('d')
+            rate = (wt / t).to('d')
+            if wt > 1. * u.d:
+                print(wt, t)
+                break
+        if is_onezone and oz_save[0] is None: 
+            oz_save[0] = rB
+            oz_save[1] = rate
+        
+        # plot
+        marker = ['ko', 'kx'][~is_onezone]
+        ax.loglog(rB, rate, marker) #, label=label)
+        
+    # plot oz estimate
+    xlim = ax.get_xlim()
+    rB_xaxis = np.logspace(np.log10(xlim[0]), np.log10(xlim[1]), 10)
+    rate_estimate = np.power(rB_xaxis/oz_save[0], 3./2) * oz_save[1]
+    ax.plot(rB_xaxis, rate_estimate, color='gray', ls='--')
+    
+    # labels
+    ax.set_xlabel(r'$R_B$ [$r_g$]')
+    ax.set_ylabel(r'rate [day/$t_B$]')
+
+    # save figure
+    savefig_name='/compare_speed.png'
+    plt.savefig("../plots/"+savefig_name,bbox_inches='tight') 
+
 
 if __name__ == "__main__":
     dirname = "021425_a0.5_rB1e6_reconnect"
@@ -145,28 +188,29 @@ if __name__ == "__main__":
     fnum = 57  # 450  # 2000 #5000
     fname = glob.glob("../data/" + dirname + "/*.out0.{:05d}.phdf".format(fnum))[0]
     # fname = sorted(glob.glob("../data/"+dirname+"/*.out0.{:05d}.phdf".format(fnum)))[-1]
-
-    dirtags = [
-        "032125_n4a0.9_toriilike",
-        "041625_n4_a0.9_toriilike_jks2_reconnect",
-        "041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
-        "041625_n4_a0.9_toriilike_jks2_smth3_reconnect",
-        "041625_n4_a0.9_toriilike_jks2_smth5_reconnect",
-    ]
-    labels = ["eks", "jks1", "2", "3", "5"]
-    dirtags = ["040625_a0.9_rB2e3", "041625_a0.9_rB2e3_jks2", "041625_a0.9_rB2e3_jks2_smth3"]
-    labels = ["eks", "jks1", "3"]
-    dirtags = ["040925_a0.9_fofc_noehbuffer", "041825_a0.9_rB2e5_jks2_smth2", "041725_a0.9_rB2e5_jks2_smth2.5", "042125_a0.9_rB2e5_jks2_smth2.7"]
-    labels = ["eks", "jks2", "2.5", "2.7"]
-    colors = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtags)))
-    matplotlib_settings()
-    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-    for i, dirtag in enumerate(dirtags):
-        timestep(dirtag, 40, ax, colors[i], labels[i])
-    output = "../plots/timestep.png"
-    plt.savefig(output, bbox_inches="tight")
-    plt.close()
-    print("saved to " + output)
+    compare_speed(["042125_a0.9_oz_jks", "050625_a0.9_rB2e5_oz_test", "042225_n4_a0.9_bondi_jks2_nocap", "042325_a0.9_rB2e3_bondi", "042325_a0.9_rB2e5_bondi"]) #"042125_n4_a0.9_bondi_jks2", "042825_a0.9_rB2e4_bondi_rot", , "042725_a0.9_rB2e5_bondi_rot"
+    if 0:
+        dirtags = [
+            "032125_n4a0.9_toriilike",
+            "041625_n4_a0.9_toriilike_jks2_reconnect",
+            "041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
+            "041625_n4_a0.9_toriilike_jks2_smth3_reconnect",
+            "041625_n4_a0.9_toriilike_jks2_smth5_reconnect",
+        ]
+        labels = ["eks", "jks1", "2", "3", "5"]
+        dirtags = ["040625_a0.9_rB2e3", "041625_a0.9_rB2e3_jks2", "041625_a0.9_rB2e3_jks2_smth3"]
+        labels = ["eks", "jks1", "3"]
+        dirtags = ["040925_a0.9_fofc_noehbuffer", "041825_a0.9_rB2e5_jks2_smth2", "041725_a0.9_rB2e5_jks2_smth2.5", "042125_a0.9_rB2e5_jks2_smth2.7"]
+        labels = ["eks", "jks2", "2.5", "2.7"]
+        colors = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtags)))
+        matplotlib_settings()
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+        for i, dirtag in enumerate(dirtags):
+            timestep(dirtag, 40, ax, colors[i], labels[i])
+        output = "../plots/timestep.png"
+        plt.savefig(output, bbox_inches="tight")
+        plt.close()
+        print("saved to " + output)
 
     dump = pyharm.load_dump(fname, ghost_zones=False)
     # max_velocities(dump)
