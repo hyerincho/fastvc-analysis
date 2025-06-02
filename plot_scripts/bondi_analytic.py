@@ -117,7 +117,7 @@ def get_quantity_for_rarr(rarr,quantity,rs=np.power(10.,2.5),mdot=1.):
     elif quantity=='vr':
     #elif quantity=='u^r':
         urarr=C1/(np.power(rarr,2)*np.power(Tarr,n))
-        vrarr=urarr/np.sqrt(1.-2.*mdot/rarr+np.power(urarr,2))
+        vrarr=urarr/np.sqrt(1.-2./rarr+np.power(urarr,2))
         return vrarr
     elif quantity=='u':
         uarr=rhoarr*Tarr*n
