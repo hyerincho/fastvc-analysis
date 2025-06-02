@@ -26,10 +26,10 @@ default_params = {
     "show_divisions": True,
     "show_rb": False,
     "boxcar_factor": 0,
-    "tmax_list": None,
+    "tmax": None,
     "average_factor": 2,
     "linestyle": None,
-    "label_list": None,
+    "label": None,
     "rescale": False,
     "show_init": 0,
     "trim_zone": True,
@@ -271,8 +271,6 @@ def plotProfiles(
     show_divisions=True,
     show_rb=False,
     zone_time_average_fraction=0,
-    xlabel=None,
-    ylabel=None,
     xlim=None,
     ylim=None,
     label=None,
@@ -294,7 +292,7 @@ def plotProfiles(
     average_factor=2,
     eta_norm_Bondi=False,
     lw=2,
-    tmax_list=None,
+    tmax=None,
 ):
     if linestyle is None: linestyle = "-"
     times = None
@@ -307,9 +305,11 @@ def plotProfiles(
 
     # If you want, provide your own figure and axis.  Good for multipanel plots.
     if fig_ax is None:
-        fig, ax = plt.subplots(1, 1, figsize=figsize)
+        fig, axes = plt.subplots(1, len(quantities), figsize=figsize)
     else:
-        fig, ax = fig_ax
+        fig, axes = fig_ax
+        if len(np.shape(axes)) > 1:
+            axes = axes.reshape(-1)
 
     if flatten_rho and quantity == "rho":
         # override
@@ -325,51 +325,46 @@ def plotProfiles(
     # Profiles are pre-computed.
     # See ../compute_scripts/computeProfiles.py for how this file is formatted.
 
-    for sim_index in range(len(listOfPickles)):
-        with open(listOfPickles[sim_index], "rb") as openFile:
-            D = pickle.load(openFile)
-        try:
-            r_sonic = D["r_sonic"]
-        except:
-            r_sonic = np.sqrt(1e5)
-        gam = 5.0 / 3.0
-        rB = 80.0 * r_sonic**2 / (27.0 * gam)
+    #for sim_index in range(len(listOfPickles)):
+    print(pkl)
+    with open(pkl, "rb") as openFile:
+        D = pickle.load(openFile)
+    try:
+        r_sonic = D["r_sonic"]
+    except:
+        r_sonic = np.sqrt(1e5)
+    gam = 5.0 / 3.0
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic)[0]
 
-        radii = D["radii"]
-        # Formula that produces the zone number of a given run.  It would have been better to have this in some other file though.
-        n_zones = D["nzone"]
+    radii = D["radii"]
+    # Formula that produces the zone number of a given run.  It would have been better to have this in some other file though.
+    n_zones = D["nzone"]
+    try:
+        n_zones_eff = D["nzone_eff"]
+    except:
+        n_zones_eff = n_zones
+    try:
+        base = D["base"]
+    except:
+        base = 8
+    if n_zones_eff > 1:
+        # zone_number_sequence = np.array([np.abs(np.abs(n_zones-1 - (i % (2*n_zones-2)))-(n_zones-1)) for i in range(len(radii))])
         try:
-            n_zones_eff = D["nzone_eff"]
+            zone_number_sequence = np.array(D["zones"])
         except:
-            n_zones_eff = n_zones
-        # print(n_zones)
-        # if 'moving_rin' in D['runName'] or 'combine_outer' in D['runName']: # temporary Hyerin (07/31/23)
-        #  n_zones_eff -= 2
-        try:
-            base = D["base"]
-        except:
-            base = 8
-        if n_zones_eff > 1:
-            # zone_number_sequence = np.array([np.abs(np.abs(n_zones-1 - (i % (2*n_zones-2)))-(n_zones-1)) for i in range(len(radii))])
-            try:
-                zone_number_sequence = np.array(D["zones"])
-            except:
-                # zone_number_sequence = np.array([n_zones_eff-1 - int(np.floor(np.log(radii[i][0])/np.log(base))) for i in range(len(radii))])
-                zone_number_sequence = np.array([get_zone_num(i, n_zones_eff) for i in range(len(radii))])
-        else:
-            zone_number_sequence = np.full(len(radii), 0)
+            # zone_number_sequence = np.array([n_zones_eff-1 - int(np.floor(np.log(radii[i][0])/np.log(base))) for i in range(len(radii))])
+            zone_number_sequence = np.array([get_zone_num(i, n_zones_eff) for i in range(len(radii))])
+    else:
+        zone_number_sequence = np.full(len(radii), 0)
 
-        if "onezone" in listOfPickles[sim_index]:
-            ONEZONE = True
-        else:
-            ONEZONE = False
-        if type(tmax_list) == list:
-            tmax = tmax_list[sim_index]
-        else:
-            tmax = tmax_list
+    if "onezone" in pkl:
+        ONEZONE = True
+    else:
+        ONEZONE = False
 
+    for j, quantity in enumerate(quantities):
         rescalingFactor = 1.0
-        if rescale[sim_index]:
+        if rescale:
             # Find rescaling factor.
             rescalingFactor = 1.0 / rescale_value
         if (rescale_Mdot and "Mdot" in quantity) or (rescale_rho and quantity == "rho"):
@@ -405,10 +400,8 @@ def plotProfiles(
             if quantity == "rho":
                 rescalingFactor = 1.0 / rho_save
             print("rB={:.3g}, rho_save={:.3g}, rho_analytic={:.3g}".format(rB, rho_save, rho_analytic))
-            rB_list[sim_index] = rB
 
         # HYERIN: split into time chunks
-        print(listOfPickles[sim_index])
 
         if quantity == "eta":
             profiles, invert = readQuantity(D, "Edot")
@@ -529,45 +522,40 @@ def plotProfiles(
             if quantity == "phib":
                 values_plot /= np.sqrt(Mdot_save)
             order = np.argsort(r_plot)
-            if label_list is None:
+            if label is None:
                 label = "t={:.5g} - {:.5g}".format(tDivList[b], tDivList[b + 1])  # r'$2^{{{}}} - 2^{{{}}}$'.format(-num_time_chunk+b,-num_time_chunk+b+1)#+r' [$t_{\rm run}$]' #
-            else:
-                label = label_list[sim_index]
             if flatten_rho and quantity == "rho":
                 values_plot *= np.power(r_plot, 1.1)  # just to test Xu+23 rho ~ r^{-0.8}
             if boxcar_factor == 0:
                 boxcar_avged = values_plot[order]
             else:
                 boxcar_avged = uniform_filter1d(values_plot[order], size=res // boxcar_factor)  # (07/12/23) boxcar averaging
-            ax.plot(r_plot[order], boxcar_avged, color=colors[b], ls=linestyle, lw=lw, label=label)
+            axes[j].plot(r_plot[order], boxcar_avged, color=colors[b], ls=linestyle, lw=lw, label=label)
             if (quantity == "eta" or (num_time_chunk == 1) or quantity == "Omega") and linestyle != "":
-                ax.plot(r_plot[order], -boxcar_avged, color=colors[b], ls=":", lw=lw + 1)
+                axes[j].plot(r_plot[order], -boxcar_avged, color=colors[b], ls=":", lw=lw + 1)
             if rescale_Mdot and quantity == "Mdot":
                 iEH = np.argmin(abs(r_plot[order] - 2))
-                Mdot_list[sim_index] = boxcar_avged[iEH]
-                print("Mdot/MdotB = {:.3g}".format(Mdot_list[sim_index]))
+                Mdot = boxcar_avged[iEH]
+                print("Mdot/MdotB = {:.3g}".format(Mdot))
             if quantity == "T":
                 Tinf = boxcar_avged[-1]
                 print("RB = {:.5g} from Tinf = {:.5g}".format(1.0 / (gam * Tinf), Tinf))
-                rB_list[sim_index] = 1.0 / (gam * Tinf)  # replace if this is available
             if quantity == "phib":
                 iEH = np.argmin(abs(r_plot[order] - 2))
-                phib_list[sim_index] = boxcar_avged[iEH]
-                print("phib at EH = {:.5g}".format(phib_list[sim_index]))
+                phib = boxcar_avged[iEH]
+                print("phib at EH = {:.5g}".format(phib))
 
             if show_init and (quantity == "rho" or quantity == "T" or quantity == "beta" or quantity == "u^r" or "Omega" in quantity):
                 # show initial conditions
                 # pdb.set_trace()
-                ax = plotIC(ax, profiles, n_zones_eff, zone_number_sequence, radii, invert, color="k", quantity=quantity)
+                axes[j] = plotIC(axes[j], profiles, n_zones_eff, zone_number_sequence, radii, invert, color="k", quantity=quantity)
 
-    # Formatting
-    if formatting:
-        if xlabel is None:
+        # Formatting
+        if formatting:
             xlabel = "Radius [$r_g$]"
-            ax.set_xlabel(xlabel)
-        if ylabel is None:
+            axes[j].set_xlabel(xlabel)
             ylabel = variableToLabel(quantity)
-            if any(rescale) or (rescale_Mdot and "Mdot" in quantity) or (rescale_value != 1):
+            if rescale or (rescale_Mdot and "Mdot" in quantity) or (rescale_value != 1):
                 ylabel = ylabel.replace("arb. units", r"$\dot{M}_B$")
             if eta_norm_Bondi and quantity == "eta":
                 ylabel = r"$\overline{\dot{M}-\dot{E}}/\dot{M}_B$"
@@ -575,177 +563,171 @@ def plotProfiles(
                 ylabel = r"$\langle \rho \rangle r^{1.1}$ [arb. units]"
             if flip_sign:
                 ylabel = "-" + ylabel
-            ax.set_ylabel(ylabel)
-            ax.set_xscale("log")
-            ax.set_yscale("log")
-            ax.set_xlim(xlim)
-            ax.set_ylim(ylim)
-        if show_divisions:
-            divisions = []
-            # for zone in range(n_zones):
-            #  divisions.append(radii[zone][-1])
-            #  if (zone == n_zones-1) | (zone == n_zones-2):
-            #    divisions.append(radii[zone][0])
-            divisions = [base**i for i in range(n_zones + 2)]
-            for div in divisions:
-                ax.plot([div] * 2, ax.get_ylim(), alpha=0.2, color="grey", lw=1)
+            axes[j].set_ylabel(ylabel)
+            axes[j].set_xscale("log")
+            axes[j].set_yscale("log")
+            axes[j].set_xlim(xlim)
+            axes[j].set_ylim(ylim)
+            if show_divisions:
+                divisions = []
+                # for zone in range(n_zones):
+                #  divisions.append(radii[zone][-1])
+                #  if (zone == n_zones-1) | (zone == n_zones-2):
+                #    divisions.append(radii[zone][0])
+                divisions = [base**i for i in range(n_zones + 2)]
+                for div in divisions:
+                    axes[j].plot([div] * 2, axes[j].get_ylim(), alpha=0.2, color="grey", lw=1)
 
-    if show_rb:
-        ax.axvline(rB, color="grey", lw=1, alpha=1, ls="--")
-    if show_bondi:
-        # Bondi analytic overplotting
-        xlim = ax.get_xlim()
-        r_bondi = np.logspace(np.log10(max(2, xlim[0])), np.log10(xlim[1]), 50)
-        analytic_sol = bondi.get_quantity_for_rarr(r_bondi, quantity, rs=r_sonic)
-        if quantity == "eta":
-            print(bondi.get_quantity_for_rarr(r_bondi, "eta", rs=r_sonic)[0], bondi.get_quantity_for_rarr(r_bondi, "RB", rs=r_sonic)[0])
-        if quantity == "Mdot" and rescale_value != 1:
-            analytic_sol *= rescalingFactor
-        #    analytic_sol = np.ones(len(r_bondi))*(-1.)*27.*gam/(80.*(gam-1)*r_sonic**2) # look at my rel. Bondi note where gam=5/3
-        #    print(analytic_sol[0])
-
-        if analytic_sol is not None:  # and not rescale:
-            if quantity == "rho":
-                label = "Bondi analytic"
-            else:
-                label = "__nolegend__"
-            if rescale_Mdot and quantity == "Mdot":  # any(rescale):
-                analytic_sol /= analytic_sol  # *= rescalingFactor
-            ax.plot(r_bondi, analytic_sol, color="slategrey", label=label, lw=10, ls="-", zorder=-100, alpha=0.5)
-            ax.plot(r_bondi, -analytic_sol, color="slategrey", lw=10, ls=":", zorder=-100, alpha=0.5)
-        # rb = 1e5
-        # rho0 = bondi.get_quantity_for_rarr([1e8], quantity, rs=r_sonic)
-        # if 'rho' in quantity:
-        #    ax.plot(r_bondi,rho0 * (r_bondi + rb) / r_bondi,'k:')
-    if show_gizmo:
-        dump_temp = pyharm.load_dump(sorted(glob.glob(sorted(glob.glob(D["runName"] + "/*[0-9][0-9][0-9][0-9][0-9]/"))[0] + "*phdf"))[0])
-        fname_gz = dump_temp["datfn"].replace("../", "/n/holylfs05/LABS/bhi/Users/hyerincho/grmhd//data/")
-        if "txt" in fname_gz:
-            dat_gz = np.loadtxt(fname_gz)  # "/n/holylfs05/LABS/bhi/Users/hyerincho/grmhd//data/gizmo/031623_100Myr/dat.txt")
-            r_gizmo = dat_gz[:, 0]
-            rho_gizmo = dat_gz[:, 1]
-            T_gizmo = dat_gz[:, 2]
-            vr_gizmo = dat_gz[:, 3]
-        else:
-            # fname = "/n/holylfs05/LABS/bhi/Users/hyerincho/grmhd/data/gizmo/021924_bp10_64_all/new_magbp10_only_exact_snap_deposit64_010.hdf5"
-            f = h5py.File(fname_gz, "r")
-            coord = f["/PartType0_dimless/Coordinates"][:]
-            rho = f["/PartType0_dimless/Density"][:]  # *1e10*u.Msun/u.kpc**3
-            theta = f["/PartType0_dimless/Temperature"][:]  # *u.K
-            v_c = f["/PartType0_dimless/Velocities"][:]  # *u.km/u.s
-            B = f["/PartType0_dimless/MagneticFields"][:]
-            beta = 2 * rho * theta / (B**2).sum(axis=1)
-            # only keeping valid coordinates
-            zero_idx = (coord[:, 1] == 0) | (coord[:, 2] == 0)  # if th or phi = 0, remove that coordinates
-            coord_valid = coord[~zero_idx, :]
-            rho_valid = rho[~zero_idx]
-            theta_valid = theta[~zero_idx]
-            v_c_valid = v_c[~zero_idx, :]
-            beta_valid = beta[~zero_idx]
-            r_valid = coord_valid[:, 0]
-            r_valid_set = sorted(set(r_valid))
-            th_valid_set = sorted(set(coord_valid[:, 1]))
-            phi_valid_set = sorted(set(coord_valid[:, 2]))
-            n_radii = len(r_valid_set)
-            n_angles = len(th_valid_set) * len(phi_valid_set)
-            for r_temp in r_valid_set:
-                if len(np.where(r_valid == r_temp)[0]) != n_angles:
-                    print("ERROR")
-            idx = np.argsort(r_valid)
-            r_gizmo = r_valid[idx].reshape(-1, n_angles)[:, 0]
-            rho_gizmo = rho_valid[idx].reshape(-1, n_angles).mean(axis=1)
-            T_gizmo = theta_valid[idx].reshape(-1, n_angles).mean(axis=1)
-            vr_gizmo = v_c_valid[idx, 0].reshape(-1, n_angles).mean(axis=1)
-            beta_gizmo = 1.0 / ((1.0 / beta_valid[idx].reshape(-1, n_angles)).mean(axis=1))
-        to_plot = None
-        min_rgizmo = r_gizmo[0]
-        if quantity == "rho":
-            to_plot = rho_gizmo
-        elif quantity == "u":
-            to_plot = T_gizmo * rho_gizmo * 3 / 2
-        elif quantity == "Pg":
-            to_plot = T_gizmo * rho_gizmo
-        elif quantity == "T":
-            to_plot = T_gizmo
-        elif quantity == "beta":
-            to_plot = beta_gizmo
-        else:
-            r_gizmo = []
-            to_plot = None  # []
-        if to_plot is not None:
-            if quantity == "rho":
-                label = "GIZMO"
-            else:
-                label = "__nolegend__"
-            ax.plot(r_gizmo, to_plot, "b-", lw=5, label=label, zorder=-100, alpha=0.3)
-
-        # extend inwards with expected Bondi solution
-        if len(r_gizmo) > 1:
-            r_bondi = np.logspace(np.log10(2), np.log10(min_rgizmo), 50)
-        else:
-            xlim = ax.get_xlim()
+        if show_rb:
+            axes[j].axvline(rB, color="grey", lw=1, alpha=1, ls="--")
+        if show_bondi:
+            # Bondi analytic overplotting
+            xlim = axes[j].get_xlim()
             r_bondi = np.logspace(np.log10(max(2, xlim[0])), np.log10(xlim[1]), 50)
-        label = "__nolegend__"
-        # extending GIZMO solution to Bondi solution
-        # if quantity != "Mdot":
-        #    analytic_sol = bondi.get_quantity_for_rarr(r_bondi, quantity, rs=r_sonic)
-        #    if quantity == "rho" or quantity == "T":
-        #        analytic_sol *= to_plot[0]/analytic_sol[-1]
-        #        if quantity == "rho": label = "Bondi extension"
-        # else:
-        #    rho = bondi.get_quantity_for_rarr([min_rgizmo],'rho',rs=r_sonic)
-        #    Mdot = bondi.get_quantity_for_rarr([min_rgizmo], 'Mdot', rs=r_sonic)
-        #    analytic_sol = [Mdot/rho[0] * rho_gizmo[0]]*len(r_bondi)
-        # if analytic_sol is not None: ax.plot(r_bondi,analytic_sol,'b-.',label=label,lw=5, zorder=-100,alpha=0.2)
+            analytic_sol = bondi.get_quantity_for_rarr(r_bondi, quantity, rs=r_sonic)
+            if quantity == "eta":
+                print(bondi.get_quantity_for_rarr(r_bondi, "eta", rs=r_sonic)[0], bondi.get_quantity_for_rarr(r_bondi, "RB", rs=r_sonic)[0])
+            if quantity == "Mdot" and rescale_value != 1:
+                analytic_sol *= rescalingFactor
+            #    analytic_sol = np.ones(len(r_bondi))*(-1.)*27.*gam/(80.*(gam-1)*r_sonic**2) # look at my rel. Bondi note where gam=5/3
+            #    print(analytic_sol[0])
 
-    if show_rscale != False:
-        # show density scalings
-        rarr = np.logspace(np.log10(2), np.log10(r_sonic), 20)  # *1000
-        if "rho" in quantity and (show_rscale == True or "rho" in show_rscale):
-            if r_sonic > 100:
-                # factor1 = 7e-8*1e5/r_sonic**2#7e-7
-                factor1 = 1e-8 * 1e5 / r_sonic**2  # 7e-7
-                factor2 = factor1 * 5000
+            if analytic_sol is not None:  # and not rescale:
+                if quantity == "rho":
+                    label = "Bondi analytic"
+                else:
+                    label = "__nolegend__"
+                if rescale_Mdot and quantity == "Mdot":  # any(rescale):
+                    analytic_sol /= analytic_sol  # *= rescalingFactor
+                axes[j].plot(r_bondi, analytic_sol, color="slategrey", label=label, lw=10, ls="-", zorder=-100, alpha=0.5)
+                axes[j].plot(r_bondi, -analytic_sol, color="slategrey", lw=10, ls=":", zorder=-100, alpha=0.5)
+            # rb = 1e5
+            # rho0 = bondi.get_quantity_for_rarr([1e8], quantity, rs=r_sonic)
+            # if 'rho' in quantity:
+            #    ax.plot(r_bondi,rho0 * (r_bondi + rb) / r_bondi,'k:')
+        if show_gizmo:
+            dump_temp = pyharm.load_dump(sorted(glob.glob(sorted(glob.glob(D["runName"] + "/*[0-9][0-9][0-9][0-9][0-9]/"))[0] + "*phdf"))[0])
+            fname_gz = dump_temp["datfn"].replace("../", "/n/holylfs05/LABS/bhi/Users/hyerincho/grmhd//data/")
+            if "txt" in fname_gz:
+                dat_gz = np.loadtxt(fname_gz)  # "/n/holylfs05/LABS/bhi/Users/hyerincho/grmhd//data/gizmo/031623_100Myr/dat.txt")
+                r_gizmo = dat_gz[:, 0]
+                rho_gizmo = dat_gz[:, 1]
+                T_gizmo = dat_gz[:, 2]
+                vr_gizmo = dat_gz[:, 3]
             else:
-                factor1 = 1e5 / r_sonic**2 * 5e-9  # 8e-9#
-                factor2 = factor1 * 10
-            ax.plot(rarr, np.power(rarr / 1e3, -1) * factor1, "g-", alpha=0.5, lw=2)  # ,label=r'$r^{-1}$')
-            ax.text(rarr[len(rarr) // 3], np.power(rarr[len(rarr) // 3] / 1e3, -1) * factor1 / np.power(r_sonic, 2.0 / 3), r"$r^{-1}$")
-            ax.plot(rarr, np.power(rarr / 1e3, -3.0 / 2.0) * factor2, "b-", alpha=0.5, lw=2)  # ,label=r'$r^{-3/2}$')
-            ax.text(rarr[len(rarr) // 2], np.power(rarr[len(rarr) // 2] / 1e3, -3.0 / 2.0) * factor2 * 2, r"$r^{-3/2}$", clip_on=True)
-            # ax.plot(rarr,np.power(rarr/1e3,-1.5)*factor,'g:',alpha=0.3,lw=10,label=r'$r^{-1.5}$')
-            # rb=1e5
-            # rho0=np.power(3e-6,1.5)
-            # ax.plot(rarr,rho0 * (rarr + rb) / rarr,'k-')
-            # ax.plot(rarr,np.power(rarr/1e3,-1/2)*factor,'g:',alpha=0.3,lw=10,label=r'$r^{-1/2}$')
-        if "T" in quantity and (show_rscale == True or "T" in show_rscale):
-            if r_sonic > 100:
-                factor = 5e-2
+                # fname = "/n/holylfs05/LABS/bhi/Users/hyerincho/grmhd/data/gizmo/021924_bp10_64_all/new_magbp10_only_exact_snap_deposit64_010.hdf5"
+                f = h5py.File(fname_gz, "r")
+                coord = f["/PartType0_dimless/Coordinates"][:]
+                rho = f["/PartType0_dimless/Density"][:]  # *1e10*u.Msun/u.kpc**3
+                theta = f["/PartType0_dimless/Temperature"][:]  # *u.K
+                v_c = f["/PartType0_dimless/Velocities"][:]  # *u.km/u.s
+                B = f["/PartType0_dimless/MagneticFields"][:]
+                beta = 2 * rho * theta / (B**2).sum(axis=1)
+                # only keeping valid coordinates
+                zero_idx = (coord[:, 1] == 0) | (coord[:, 2] == 0)  # if th or phi = 0, remove that coordinates
+                coord_valid = coord[~zero_idx, :]
+                rho_valid = rho[~zero_idx]
+                theta_valid = theta[~zero_idx]
+                v_c_valid = v_c[~zero_idx, :]
+                beta_valid = beta[~zero_idx]
+                r_valid = coord_valid[:, 0]
+                r_valid_set = sorted(set(r_valid))
+                th_valid_set = sorted(set(coord_valid[:, 1]))
+                phi_valid_set = sorted(set(coord_valid[:, 2]))
+                n_radii = len(r_valid_set)
+                n_angles = len(th_valid_set) * len(phi_valid_set)
+                for r_temp in r_valid_set:
+                    if len(np.where(r_valid == r_temp)[0]) != n_angles:
+                        print("ERROR")
+                idx = np.argsort(r_valid)
+                r_gizmo = r_valid[idx].reshape(-1, n_angles)[:, 0]
+                rho_gizmo = rho_valid[idx].reshape(-1, n_angles).mean(axis=1)
+                T_gizmo = theta_valid[idx].reshape(-1, n_angles).mean(axis=1)
+                vr_gizmo = v_c_valid[idx, 0].reshape(-1, n_angles).mean(axis=1)
+                beta_gizmo = 1.0 / ((1.0 / beta_valid[idx].reshape(-1, n_angles)).mean(axis=1))
+            to_plot = None
+            min_rgizmo = r_gizmo[0]
+            if quantity == "rho":
+                to_plot = rho_gizmo
+            elif quantity == "u":
+                to_plot = T_gizmo * rho_gizmo * 3 / 2
+            elif quantity == "Pg":
+                to_plot = T_gizmo * rho_gizmo
+            elif quantity == "T":
+                to_plot = T_gizmo
+            elif quantity == "beta":
+                to_plot = beta_gizmo
             else:
-                factor = 1e-1
-            ax.plot(rarr, np.power(rarr, -1) * factor, "b-", alpha=0.5, lw=2)  # ,label=r'$r^{-1}$')
-            ax.text(rarr[len(rarr) // 4], np.power(rarr[len(rarr) // 4], -1) * factor / np.power(r_sonic, 3.0 / 5), r"$r^{-1}$")
-        if quantity == "beta" and (show_rscale == True or "beta" in show_rscale):
-            # TODO: should I show this? idk
-            factor = 1e7 / r_sonic**2  #
-            ax.plot(rarr, np.power(rarr / 1e3, 3 / 2.0) * factor, "g-", alpha=0.5, lw=2)  # ,label=r'$r^{3/2}$')
-            ax.text(rarr[-1], np.power(rarr[-1] / 1e3, 3 / 2) * factor / 10, r"$r^{3/2}$")
-        if quantity == "phib" and (show_rscale == True or "phib" in show_rscale):
-            factor = 1 / 2  #
-            ax.plot(rarr, np.power(rarr, 1) * factor, "g-", alpha=0.5, lw=2)  # ,label=r'$r^{1}$')
-            ax.text(rarr[len(rarr) // 2], np.power(rarr[len(rarr) // 2], 1) * factor / 3, r"$r^{1}$")
-        if quantity == "u^r" and (show_rscale == True or "u^r" in show_rscale):
-            factor = 1 / 10
-            ax.plot(rarr, np.power(rarr, -1 / 2) * factor, "g-", alpha=0.5, lw=2)  # ,label=r'$r^{1}$')
-            ax.text(rarr[len(rarr) // 2], np.power(rarr[len(rarr) // 2], -1 / 2) * factor / 10, r"$r^{-1/2}$")
-    # legends
-    if formatting:
-        for sim_index in range(len(listOfPickles)):
-            ax.legend(loc="best", frameon=False)
+                r_gizmo = []
+                to_plot = None  # []
+            if to_plot is not None:
+                if quantity == "rho":
+                    label = "GIZMO"
+                else:
+                    label = "__nolegend__"
+                axes[j].plot(r_gizmo, to_plot, "b-", lw=5, label=label, zorder=-100, alpha=0.3)
+
+            # extend inwards with expected Bondi solution
+            if len(r_gizmo) > 1:
+                r_bondi = np.logspace(np.log10(2), np.log10(min_rgizmo), 50)
+            else:
+                xlim = axes[j].get_xlim()
+                r_bondi = np.logspace(np.log10(max(2, xlim[0])), np.log10(xlim[1]), 50)
+            label = "__nolegend__"
+            # extending GIZMO solution to Bondi solution
+            # if quantity != "Mdot":
+            #    analytic_sol = bondi.get_quantity_for_rarr(r_bondi, quantity, rs=r_sonic)
+            #    if quantity == "rho" or quantity == "T":
+            #        analytic_sol *= to_plot[0]/analytic_sol[-1]
+            #        if quantity == "rho": label = "Bondi extension"
+            # else:
+            #    rho = bondi.get_quantity_for_rarr([min_rgizmo],'rho',rs=r_sonic)
+            #    Mdot = bondi.get_quantity_for_rarr([min_rgizmo], 'Mdot', rs=r_sonic)
+            #    analytic_sol = [Mdot/rho[0] * rho_gizmo[0]]*len(r_bondi)
+            # if analytic_sol is not None: ax.plot(r_bondi,analytic_sol,'b-.',label=label,lw=5, zorder=-100,alpha=0.2)
+
+        if show_rscale != False:
+            # show density scalings
+            rarr = np.logspace(np.log10(2), np.log10(r_sonic), 20)  # *1000
+            if "rho" in quantity and (show_rscale == True or "rho" in show_rscale):
+                if r_sonic > 100:
+                    # factor1 = 7e-8*1e5/r_sonic**2#7e-7
+                    factor1 = 1e-8 * 1e5 / r_sonic**2  # 7e-7
+                    factor2 = factor1 * 5000
+                else:
+                    factor1 = 1e5 / r_sonic**2 * 5e-9  # 8e-9#
+                    factor2 = factor1 * 10
+                ax[j].plot(rarr, np.power(rarr / 1e3, -1) * factor1, "g-", alpha=0.5, lw=2)  # ,label=r'$r^{-1}$')
+                ax[j].text(rarr[len(rarr) // 3], np.power(rarr[len(rarr) // 3] / 1e3, -1) * factor1 / np.power(r_sonic, 2.0 / 3), r"$r^{-1}$")
+                ax[j].plot(rarr, np.power(rarr / 1e3, -3.0 / 2.0) * factor2, "b-", alpha=0.5, lw=2)  # ,label=r'$r^{-3/2}$')
+                ax[j].text(rarr[len(rarr) // 2], np.power(rarr[len(rarr) // 2] / 1e3, -3.0 / 2.0) * factor2 * 2, r"$r^{-3/2}$", clip_on=True)
+            if "T" in quantity and (show_rscale == True or "T" in show_rscale):
+                if r_sonic > 100:
+                    factor = 5e-2
+                else:
+                    factor = 1e-1
+                axes[j].plot(rarr, np.power(rarr, -1) * factor, "b-", alpha=0.5, lw=2)  # ,label=r'$r^{-1}$')
+                axes[j].text(rarr[len(rarr) // 4], np.power(rarr[len(rarr) // 4], -1) * factor / np.power(r_sonic, 3.0 / 5), r"$r^{-1}$")
+            if quantity == "beta" and (show_rscale == True or "beta" in show_rscale):
+                # TODO: should I show this? idk
+                factor = 1e7 / r_sonic**2  #
+                axes[j].plot(rarr, np.power(rarr / 1e3, 3 / 2.0) * factor, "g-", alpha=0.5, lw=2)  # ,label=r'$r^{3/2}$')
+                axes[j].text(rarr[-1], np.power(rarr[-1] / 1e3, 3 / 2) * factor / 10, r"$r^{3/2}$")
+            if quantity == "phib" and (show_rscale == True or "phib" in show_rscale):
+                factor = 1 / 2  #
+                axes[j].plot(rarr, np.power(rarr, 1) * factor, "g-", alpha=0.5, lw=2)  # ,label=r'$r^{1}$')
+                axes[j].text(rarr[len(rarr) // 2], np.power(rarr[len(rarr) // 2], 1) * factor / 3, r"$r^{1}$")
+            if quantity == "u^r" and (show_rscale == True or "u^r" in show_rscale):
+                factor = 1 / 10
+                axes[j].plot(rarr, np.power(rarr, -1 / 2) * factor, "g-", alpha=0.5, lw=2)  # ,label=r'$r^{1}$')
+                axes[j].text(rarr[len(rarr) // 2], np.power(rarr[len(rarr) // 2], -1 / 2) * factor / 10, r"$r^{-1/2}$")
+        # legends
+        if formatting:
+            axes[j].legend(loc="best", frameon=False)
             fig.tight_layout()
 
     if fig_ax is not None:
-        return (fig, ax)
+        return (fig, axes)
     elif output is not None:
         fig.savefig(output)
         plt.close(fig)

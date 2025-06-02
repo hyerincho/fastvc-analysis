@@ -101,16 +101,19 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
         zone_num = zones[i]
         bin_num = binNumList[i]
         if bin_num is not None:
-            switch_num = np.argwhere((switch_list[i] >= switch_pt[:-1]) & (switch_list[i] < switch_pt[1:]))
+            switch_num = np.argwhere((switch_list[i] > switch_pt[:-1]) & (switch_list[i] <= switch_pt[1:]))
             if len(switch_num) > 1:
                 print("ERROR: can't identify when this output is switched!")
             else:
                 switch_num = switch_num[0, 0]
-            # if switch_list[i] >= (switch_pt[switch_num] + switch_pt[switch_num + 1]) * perzone_avg_frac: # realized that this only works for perzone_avg_frac=0.5
+            #if zone_num == 6: pdb.set_trace()
             if switch_pt[switch_num + 1] - switch_list[i] <= (switch_pt[switch_num + 1] - switch_pt[switch_num]) * perzone_avg_frac:
                 # only when it is last (perzone_avg_frac), stage for averaging
                 sortedProfiles[zone_num][bin_num].append(profile)
-                deltBin[zone_num][bin_num].append(delt[i])
+                #deltBin[zone_num][bin_num].append(delt[i])
+                delt = times[i] - times[i-1]
+                if zone_num == 0 and delt > 100: delt = 100 # temporary TODO
+                deltBin[zone_num][bin_num].append(delt)
 
     for b in range(num_time_chunk):
         for zone in range(n_zones_eff):
@@ -118,9 +121,9 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
                 # empty
                 continue
             else:
-                #avgedProfiles[zone][b] = np.mean(sortedProfiles[zone][b], axis=0)
-                pdb.set_trace()
-                avgedProfiles[zone][b] = (np.sum(sortedProfiles[zone][b] * deltBin[zone][b], axis=0) / np.sum(deltBin[zone][b])) # trying out delt weighting
+                #deltBin[zone][b] = np.gradient(np.array(deltBin[zone][b]))
+                avgedProfiles[zone][b] = np.mean(sortedProfiles[zone][b], axis=0)
+                #avgedProfiles[zone][b] = (np.sum(np.array([deltBin[zone][b]]).T * sortedProfiles[zone][b], axis=0) / np.sum(deltBin[zone][b])) # trying out delt weighting
 
     return avgedProfiles, invert
 
@@ -242,14 +245,16 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
     if save_rho:
         # rescale Mdot depending on the density at Bondi radius
         r_sonic = dictionary["dump"]["rs"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic)[0]
-        Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic)[0]
-        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic)[0]
+        mdot = dictionary["dump"]["mdot"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot)[0]
+        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot)[0]
         for b in range(num_time_chunk):
             # rho_save = min(valuesListRho[b])
-            rho_save = min(valuesListRho[b][radii < 5 * rB])
+            #rho_save = min(valuesListRho[b][radii < 5 * rB])
             irB = np.argmin(abs(rList[b] - rB))
-            # rho_save = valuesListRho[b][irB]
+            rho_save = valuesListRho[b][irB] # the method used in Cho+24
+            print(rho_analytic, valuesListRho[b][-1])
             print("rho_save={:.5g}, factor={:.5g}".format(rho_save, rho_analytic / (Mdot_analytic * rho_save)))
             valuesList[b] *= rho_analytic / (Mdot_analytic * rho_save)
 
@@ -270,10 +275,14 @@ def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2, tmax=None):
     binNumList = [None for _ in range(len(times))]  # np.full(len(times), np.nan)
 
     if tmax is not None:
-        if t_last > tmax:
-            t_last = tmax
+        r_sonic = dictionary["dump"]["rs"]
+        mdot = dictionary["dump"]["mdot"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        tB = np.power(rB, 3./2)
+        if t_last > tmax * tB:
+            t_last = tmax * tB
         else:
-            print("The run hasn't reached {}tg. Instead using {:.3g}tg".format(tmax, t_last))
+            print("The run hasn't reached {}tB, or {}tg. Instead using {:.3g}tg".format(tmax, tmax * tB, t_last))
 
     tDivList = np.array([t_first + (t_last - t_first) / np.power(time_bin_factor, i + 1) for i in range(num_time_chunk)])
     tDivList = tDivList[::-1]  # in increasing time order
@@ -291,7 +300,7 @@ def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2, tmax=None):
     return tDivList, binNumList
 
 
-def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, label=None, linestyle="-", legend=True):
+def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, label=None, linestyle="-", legend=True, print_radius=None):
     # n_zones_eff = len(profile)
     num_time_chunk = len(profile)
     if colors is None:
@@ -303,6 +312,10 @@ def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, label=None, l
             label_use = label
         if len(radii[b]) > 0:
             ax.plot(radii[b], profile[b], color=colors[b], lw=2, label=label_use, ls=linestyle)
+            if print_radius is not None:
+                i_r = np.argmin(abs(radii[b] - print_radius))
+                print("at r={:.5g}, quantity={:.5g}".format(radii[b][i_r], profile[b][i_r]))
+
     #    for zone in range(n_zones_eff):
     #        if len(profile[zone][b]) == 0:
     #            # empty
@@ -348,6 +361,8 @@ def plotProfiles(
     rescale=False,
     flatten_rho=False,
     legend_all=True,
+    verbose=False,
+    prioritize_inner=False,
 ):
     # Changes some defaults.
     matplotlib_settings()
@@ -362,7 +377,17 @@ def plotProfiles(
         D = pickle.load(openFile)
 
     tDivList, binNumList = setTimeBins(D, num_time_chunk, time_bin_factor=time_bin_factor, tmax=tmax)
-    mask_list = get_mask(D)
+    mask_list = get_mask(D, prioritize_inner=prioritize_inner)
+
+    # get important radii
+    try:
+        rEH = D["dump"]["r_eh"]
+    except:
+        a = 0  # for now
+        rEH = 1.0 + np.sqrt(1.0 - a**2)
+    r_sonic = D["dump"]["rs"]
+    mdot = D["dump"]["mdot"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
 
     for i, quantity in enumerate(quantity_list):
         if fig_ax is None:
@@ -374,19 +399,25 @@ def plotProfiles(
         if i == 0:
             for b in range(len(tDivList) - 1):
                 print("{}: t={:.3g}-{:.3g}".format(b, tDivList[b], tDivList[b + 1]))
-
-        plotProfileQuantity(ax, radii, profiles, tDivList, colors=color_list, label=label, linestyle=linestyle, legend=(legend_all or (i == 0)))
+    
+        print_radius = None
+        if verbose:
+            if quantity == "Mdot" or quantity == "phib": print_radius = rEH
+            elif quantity == "eta": print_radius = rB
+        plotProfileQuantity(ax, radii, profiles, tDivList, colors=color_list, label=label, linestyle=linestyle, legend=(legend_all or (i == 0)), print_radius=print_radius)
 
         if show_init and ((quantity == "rho" and not flatten_rho) or quantity == "T" or quantity == "beta" or quantity == "u^r"):
             plotIC(ax, D, quantity)
-        if show_rscale:
-            r_sonic = D["dump"]["rs"]
-            rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic)[0]
-            rarr = np.logspace(2, np.log10(rB), 20)
-            if quantity == "phib":
+        if show_rscale or show_rb:
+            if show_rscale and quantity == 'phib':
+                rarr = np.logspace(2, np.log10(rB), 20)
                 factor = 0.5
                 ax.plot(rarr, np.power(rarr, 1) * factor, "g-", alpha=0.5, lw=2)
                 ax.text(rarr[len(rarr) // 2], np.power(rarr[len(rarr) // 2], 1) * factor / 3, r"$r^{1}$")
+            if show_rb:
+                if num_time_chunk==1: color=color_list[0]
+                else: color='grey'
+                ax.axvline(rB, color=color, lw=1, alpha=1, ls='--')
 
         # Formatting
         if formatting:
@@ -410,11 +441,6 @@ def plotProfiles(
             elif quantity == "Mdot":
                 ax.set_ylim([3e-4, 5])
 
-            try:
-                rEH = D["dump"]["r_eh"]
-            except:
-                a = 0  # for now
-                rEH = 1.0 + np.sqrt(1.0 - a**2)
             xlim = (rEH, ax.get_xlim()[-1])
             ax.set_xlim(xlim)
 
@@ -432,16 +458,16 @@ if __name__ == "__main__":
     pkl_name = "../data_products/030425_a0.5_safe_longtin20_profiles_all.pkl"
     pkl_name = "../data_products/delta/030525_a0.9_oz_profiles_all.pkl"
     pkl_name = "../data_products/030325_a0.0_safe_tchar_profiles_all.pkl"
-    # pkl_name = "../data_products/030725_a0.9_safe_longtin20_profiles_all.pkl"
-    pkl_name = "../data_products/030925_a0.0_n8_lt10_dirichlet_profiles_all.pkl"
+    pkl_name = "../data_products/030725_a0.9_safe_longtin20_profiles_all.pkl"
+    #pkl_name = "../data_products/030925_a0.0_n8_lt10_dirichlet_profiles_all.pkl"
     # pkl_name = "../data_products/031125_a0.5_dirichlet_profiles_all.pkl"a
-    pkl_name = "../data_products/delta/032025_a0.5_oz_clearangle_profiles_all.pkl"
+    #pkl_name = "../data_products/delta/032025_a0.5_oz_clearangle_profiles_all.pkl"
     # pkl_name = "../data_products/032325_n4a0.9_toriilike_beta1_profiles_all.pkl"
     # pkl_name = "../data_products/040225_a0.0_fofc_profiles_all.pkl"
     # pkl_name = "../data_products/040325_n4_a0.9_torrilike_nocap_profiles_all.pkl"
-    pkl_name = "../data_products/040825_n4_a0.9_torrilike_nocap_nc8000_profiles_all.pkl"
+    #pkl_name = "../data_products/040825_n4_a0.9_torrilike_nocap_nc8000_profiles_all.pkl"
     # pkl_name = "../data_products/041625_n4_a0.9_toriilike_jks_reconnect_profiles_all.pkl"
-    # pkl_name = "../data_products/041625_n4_a0.9_toriilike_jks2_smth3_reconnect_profiles_all.pkl"
+    pkl_name = "../data_products/041625_n4_a0.9_toriilike_jks2_smth2_reconnect_profiles_all.pkl"
     # pkl_name = "../data_products/041625_a0.9_rB2e3_jks2_smth3_profiles_all.pkl"
     # pkl_name = "../data_products/041725_a0.9_rB2e3_jks2_smth2_profiles_all.pkl"
     # pkl_name = "../data_products/041725_a0.9_rB2e5_jks2_smth2.5_profiles_all.pkl"
@@ -452,12 +478,16 @@ if __name__ == "__main__":
     # pkl_name = "../data_products/042125_n4_a0.5_jks2_profiles_all.pkl"
     # pkl_name = "../data_products/042125_a0.9_oz_jks_profiles_all.pkl"
     # pkl_name = "../data_products/042225_n4_a0.9_retrograde_profiles_all.pkl"
-    pkl_name = "../data_products/042225_n4_a0.9_toriilike_jks2_nocap_profiles_all.pkl"
+    #pkl_name = "../data_products/042225_n4_a0.9_toriilike_jks2_nocap_profiles_all.pkl"
+    pkl_name = "../data_products/042225_n4_a0.9_bondi_jks2_nocap_profiles_all.pkl"
     pkl_name = "../data_products/042325_a0.9_rB2e5_bondi_profiles_all.pkl"
-    # pkl_name = "../data_products/042325_a0.9_rB2e3_capRB_profiles_all.pkl"
-    # pkl_name = "../data_products/042325_n4_a0.9_tl_uphi0_profiles_all.pkl"
-    #pkl_name = "../data_products/042425_a0.0_rB2e5_bondi_jks2_profiles_all.pkl"
-    # pkl_name = "../data_products/043025_n4_a0.9_bondi_bflux0_profiles_all.pkl"
+    pkl_name = "../data_products/043025_a0.9_rB2e3_bondi_eks_profiles_all.pkl"
+    pkl_name = "../data_products/051225_n4_a0.9_bondi_nocap_newflr_profiles_all.pkl"
+    #pkl_name = "../data_products/051225_n4_a0.9_torrilike_nocap_newflr_profiles_all.pkl"
+    #pkl_name = "../data_products/051225_n4_a0.9_toriilike_newflr_profiles_all.pkl"
+    pkl_name = "../data_products/051225_n4_a-0.9_toriilike_eks_profiles_all.pkl"
+    pkl_name = "../data_products/051325_a0.0_rB2e5_eks_profiles_all.pkl"
+    #pkl_name = "../data_products/delta/051325_a0.9_rB2e5_bondi_eks_profiles_all.pkl"
 
     plot_dir = "../plots/test"  # common directory
     os.makedirs(plot_dir, exist_ok=True)
@@ -479,4 +509,4 @@ if __name__ == "__main__":
         "phib",
     ]
     print(pkl_name)
-    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=1.0, num_time_chunk=3, time_bin_factor=1.5, rescale=True, show_init=True, show_rscale=False, flatten_rho=False)  # , tmax=1.5e6)
+    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=.5, num_time_chunk=4, time_bin_factor=1.25, rescale=True, show_init=True, show_rscale=False, flatten_rho=False, tmax=600)

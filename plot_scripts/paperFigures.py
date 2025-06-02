@@ -1,0 +1,494 @@
+from plot_utils import *
+from plotEvolution import plotEvolution
+
+def powerlaw_func(x, a, b):
+    return a * np.power(x, b)
+
+def lin_func(x, a, b):
+    return a * x + b
+
+def compare_prescription_slice():
+    from matplotlib import patches
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    sz = 64
+    kwargs = {'native': False, 'log_r':False, 'vmin': -1, 'vmax':1, 'window': (-sz, sz, -sz, sz), 'shading':'flat', 'label':''}
+    
+    fnums = [11, 8011]
+    dirtags = ["043025_n4_a0.9_bondi_bflux0", "041625_n4_a0.9_toriilike_jks2_smth2_reconnect", ]
+    labels = ["bflux0", "bflux-const"]
+    for i, dirtag in enumerate(dirtags):
+        fig, ax = plt.subplots(1, 2, figsize=(15, 7.5), sharey=True)
+        plt.subplots_adjust(wspace=0.)
+        for j, fnum in enumerate(fnums):
+            fname = "../data/" + dirtag + "/highcadence/bondi.out0.{:05d}.phdf".format(fnum)
+            dump = pyharm.load_dump(fname)
+            if j == 1: kwargs["ylabel"] = False
+            else: kwargs["ylabel"] = True
+            pyharm.plots.plot_xz(ax[j], dump, 'symlog_FE_EM_A', cbar=False, **kwargs)
+        
+        fig.suptitle(labels[i])
+        ax[0].set_title("end of zone-0", fontsize=27) #-60, 55, 
+        ax[1].set_title("end of zone-1", fontsize=27)
+        transFigure = fig.transFigure.inverted()
+        coord1 = transFigure.transform(ax[0].transData.transform([55,0]))
+        coord2 = transFigure.transform(ax[1].transData.transform([-55,0]))
+        arrow = patches.FancyArrowPatch(
+                    coord1, coord2,
+                    shrinkA=0,
+                    shrinkB=0,
+                    arrowstyle="-|>",
+                    transform=fig.transFigure,
+                    mutation_scale=20,
+                    color="black")
+        fig.patches.append(arrow)
+        output = "../plots/compare_prescription_slice_" + labels[i] + ".png"
+        plt.savefig(output, bbox_inches="tight")
+        print("saved to " + output)
+
+
+def compare_evolution_rB():
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    quantities = ["Mdot", "eta", "phib"]
+    figsize = (24, 5 * len(quantities))
+    fig, ax = plt.subplots(len(quantities), 1, figsize=figsize, sharex=True)
+    if len(quantities) == 1: ax = [ax]
+    plt.subplots_adjust(wspace=0., hspace=0)
+
+    dirtags = [
+        "051225_n4_a0.9_bondi_nocap_newflr",
+        "043025_a0.9_rB2e3_bondi_eks",
+        "delta/051325_a0.9_rB2e5_bondi_eks",
+        "043025_a0.9_rB2e5_bondi_eks",
+        #"051325_a0.0_rB2e5_eks",
+        #"042325_a0.9_rB2e5_bondi",
+        ]
+
+    colors = plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtags)))
+    tmaxs = [400, 700, 700, 600, 400] 
+    labels = ["400", "2e3", "2e4", "2e5", "2e5_a0", "2e5_jks"]
+    for i, dirtag in enumerate(dirtags):
+        pkl = "../data_products/" + dirtag + "_profiles_all.pkl"
+        with open(pkl, "rb") as openFile:
+            D = pickle.load(openFile)
+        r_sonic = D["dump"]["rs"]
+        mdot = D["dump"]["mdot"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        for j, quantity in enumerate(quantities):
+            #if quantity == "eta": radius = rB
+            #else: radius = None
+            plotEvolution(pkl, ax_passed=ax[j], quantity=quantity, average_factor=1.25, xaxis_t=True, scale_tB=True, color=colors[i], rescaleMdot=True, tmax=tmaxs[i], show_avg=True, show_negative=False, label=labels[i], perzone_avg_frac=0.5, only_selectively_show=True, take_mean=True, radius=None) #, use_Mdot_mean=True)
+
+    #ax[0].set_yscale('linear')
+    ax[1].legend(ncol=len(dirtags), bbox_to_anchor=(0.5, 0.15), numpoints=1)#, fontsize=20)
+    ax[0].set_ylim([1e-4,1]) #([0, 0.15])
+    ax[0].set_xlim([0, np.max(tmaxs)]) #([0, 0.15])
+    ax[0].set_ylabel(r"$\dot{M}$ [$\dot{M}_B$]")
+    ax[1].set_ylabel(r"$\eta$")
+    ax[2].set_ylabel(r"$\phi_b$")
+    ax[2].set_ylim([6,150])
+    #ax[2].set_yscale('linear')
+    xlabel = r"$t$ [$t_B$]"
+    ax[-1].set_xlabel(xlabel)
+    output = "../plots/compare_evolution_rB.png"
+    plt.savefig(output, bbox_inches="tight")
+    print("saved to " + output)
+    plt.close(fig)
+
+def compare_quantity_rB():
+    from plotProfiles import setTimeBins, get_mask, calcFinalTimeAvg
+
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    quantities = ["Mdot", "eta"] #, "phib"]
+    figsize = (9, 4 * len(quantities))
+    fig, ax = plt.subplots(len(quantities), 1, figsize=figsize, sharex=True) #, sharey=True)
+    if len(quantities) == 1: ax = [ax]
+    plt.subplots_adjust(wspace=0., hspace=0)
+
+    dirtags = [
+        "051225_n4_a0.9_bondi_nocap_newflr",
+        "043025_a0.9_rB2e3_bondi_eks",
+        "delta/051325_a0.9_rB2e5_bondi_eks",
+        "043025_a0.9_rB2e5_bondi_eks",
+        #"051325_a0.0_rB2e5_eks",
+        ]
+    
+    time_bin_factor = 1.25
+    perzone_avg_frac = 0.5
+    colors = list(plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtags)))) # + ['k']
+    tmaxs = [400, 700, 700, 600, 400]
+    for i, dirtag in enumerate(dirtags):
+        pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
+        print(pkl_name)
+        with open(pkl_name, "rb") as openFile:
+            D = pickle.load(openFile)
+        tDivList, binNumList = setTimeBins(D, 1, time_bin_factor=time_bin_factor, tmax=tmaxs[i])
+        mask_list = get_mask(D)
+        r_sonic = D["dump"]["rs"]
+        mdot = D["dump"]["mdot"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        rEH = D["dump"]["r_eh"]
+        for j, quantity in enumerate(quantities):
+            radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac, mask_list=mask_list, rescale=True)
+            if quantity == "Mdot" or quantity == "phib":
+                r_read = rEH
+            elif quantity == "eta":
+                r_read = rB
+            else:
+                print("WARNING not supported")
+            i_r = np.argmin(abs(radii[0] - r_read))
+            q_out = profiles[0][i_r]
+            print("at r={:.5g}, {}={:.5g}".format(radii[0][i_r], quantity, profiles[0][i_r]))
+            mfc=colors[i]
+            #if i == len(dirtags) - 1: mfc = 'none'
+            ax[j].plot(rB, q_out, color=colors[i], marker='.', ms=20, markerfacecolor=mfc)
+
+    # Cho+24 scaling
+    rBlist = np.logspace(2, 6, 10)
+    ax[0].plot(rBlist, np.power(rBlist/6, -0.5), 'b')
+    
+    # plot settings
+    ax[0].set_xscale('log')
+    ax[0].set_yscale('log')
+    ax[1].set_yscale('log')
+    ax[0].set_ylim([1e-3, 0.4])
+    ax[1].set_ylim([1e-2, 4])
+    for ax_temp in ax:
+        ax_temp.set_xlabel(r'$R_B$ [$r_g$]')
+    ax[0].axhline(1, color='k', ls=":")
+    ax[1].axhspan(0.1, 1, color='g', alpha=0.1)
+    #ax[2].set_ylim([10, 100])
+    ax[0].set_ylabel(r"$\overline{\dot{M}}(r_H)$ [$\dot{M}_B$]")
+    ax[1].set_ylabel(r'$\eta(R_B)$')
+
+    # save
+    output = "../plots/compare_quantity_rB.png"
+    plt.savefig(output, bbox_inches="tight")
+    print("saved to " + output)
+    plt.close(fig)
+
+def show_snapshot(fnum):
+    from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+    from pyharm.plots.overlays import overlay_field
+    import matplotlib.patches as patches
+    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    
+    #fig = plt.figure(figsize=(25,13))
+    fig = plt.figure(figsize=(36,12))
+    spec_snp = GridSpec(1, 1)[0]
+    plt.subplots_adjust(hspace=0.01)
+    
+    #gs = GridSpecFromSubplotSpec(2, 4, subplot_spec = spec_snp, hspace=0.02, wspace=0.02)
+    gs = GridSpecFromSubplotSpec(2, 6, subplot_spec = spec_snp, hspace=0.02, wspace=0.02)
+    ax = []
+    for cell in gs: ax += [plt.subplot(cell)]
+    ax = np.array(ax).reshape(2,-1)
+
+    plotrc={}
+    plotrc.update({'xlabel': False, 'ylabel': False,'xticks': [], 'yticks': [],'cbar': False, 'frame': False, 'no_title': True, 'shading': 'flat'})
+    inwards = -1 # 1
+
+    # read file
+    dirtag = "043025_a0.9_rB2e5_bondi_eks"
+    fn = glob.glob("../data/" + dirtag + "/*{:05d}*.phdf".format(fnum))[0]
+    dump = pyharm.load_dump(fn,ghost_zones=False)
+    r_sonic = dump["rs"]
+    mdot = dump["mdot"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    iwv = dump["Params"]["Multizone/i_within_vcycle"]
+    nzeff = dump["Params"]["Multizone/nzones_eff"]
+    i_zone = abs(iwv - (nzeff - 1))
+    print("fnum {} t={:.5g} tg / {:.5g} tB izone{}".format(fnum, dump["t"], dump["t"] / np.power(rB, 3./2), i_zone))
+    n_zones = 6 #dump["Params"]["Multizone/nzones_eff"]
+    patch_sz = np.zeros(n_zones)
+
+    axes = ax #np.concatenate((ax[0],ax[1,::-1]))
+    for i in range(np.shape(axes)[1]): #, ax1d in enumerate(axes):
+        if i < n_zones: 
+            sz = 8**(i+1.8)
+            window = (-sz, sz, -sz, sz)
+            #im1 = pyharm.plots.plot_xz(ax1d, dump, "log_beta", window=window, cmap='plasma', vmin=1e-1, vmax=1e3, **plotrc)
+            #im1 = pyharm.plots.plot_xz(ax1d, dump, "log_K", window=window, cmap='jet', vmin=1e-1, vmax=1e6, **plotrc)
+            #im1 = pyharm.plots.plot_xz(ax1d, dump, "symlog_FE_norho_A", window=window, vmin=-1e-3, vmax=1e-3, **plotrc)
+            im1 = pyharm.plots.plot_xz(axes[0,i], dump, "log_Theta", window=window, vmin=8e-6, vmax=1, cmap='gist_heat', **plotrc)
+            im2 = pyharm.plots.plot_xz(axes[1,i], dump, dump["rho"], window=window, vmin=1e-10, vmax=1e-4, log=True, cmap='turbo', **plotrc)# turbo nipy_spectral half_cut=True, 
+            scale = np.power(10,np.floor(np.log10(sz)))
+            c= 'white'
+            scalebar = AnchoredSizeBar(axes[0,i].transData, scale, r'$10^{:d}\, r_g$'.format(int(np.log10(scale))), 'lower left', pad=0.5, color=c, frameon=False, size_vertical=sz/8**2)
+            axes[0,i].add_artist(scalebar)
+            axes[0,i].title.set_visible(False)
+            
+            if i==0:
+                axes[0,i].text(-sz*0.9, sz*0.7, r'$T$', color='w', fontsize=40)
+                axes[1,i].text(-sz*0.9, sz*0.7, r'$\rho$', color='w', fontsize=40)
+
+                # colorbar for each rows
+                for j, im in enumerate([im1, im2]):
+                    cb=fig.colorbar(im, cax=axes[j,i].inset_axes((-0.1, 0.15, 0.05, 0.7)))
+                    cb.ax.tick_params(labelleft=True, labelright=False)
+            
+            # show B fields
+            at_i = np.argmin(abs(dump["r1d"] - sz * 1.5))
+            overlay_field(axes[1,i], dump, half_cut=True,nlines=15, reverse=True, i_slice=slice(0, at_i), color='k')#, sum=False)
+
+            # show RB
+            for j in range(2): 
+                if rB < sz * 2 and rB > sz / 50:
+                    circle1 = plt.Circle((0, 0), rB, ec='grey', fill=False, ls="--", lw=3)
+                    axes[j,i].add_artist(circle1)
+                if i == 4:
+                    axes[j,i].text(-sz*0.9, sz*0.3, r'$R_B$', color='grey', fontsize=30)
+        
+            patch_sz[i] = sz
+    
+    for i in range(np.shape(axes)[1]): #, ax1d in enumerate(axes):
+        for j in range(2):
+            if i+(inwards>0) < n_zones and i+inwards >= 0: # and i < n_zones:
+                rect = patches.Rectangle((-patch_sz[i+inwards],-patch_sz[i+inwards]), 2*patch_sz[i+inwards], 2*patch_sz[i+inwards], linewidth=3, edgecolor='w', facecolor='none')
+                axes[j, i].add_patch(rect)
+                print(patch_sz[i+inwards])
+                con1 = patches.ConnectionPatch(xyA=(inwards*patch_sz[i+inwards], -patch_sz[i+inwards]), xyB=(-inwards*patch_sz[i+inwards],-patch_sz[i+inwards]), coordsA="data", coordsB="data", axesA=axes[j,i], axesB=axes[j,i+inwards], color='w',ls=':', lw=2)
+                con2 = patches.ConnectionPatch(xyA=(inwards*patch_sz[i+inwards], patch_sz[i+inwards]), xyB=(-inwards*patch_sz[i+inwards],patch_sz[i+inwards]), coordsA="data", coordsB="data", axesA=axes[j,i], axesB=axes[j,i+inwards], color='w',ls=':', lw=2)
+
+                fig.add_artist(con1)
+                fig.add_artist(con2)
+            
+        # panel numbers
+        axes[0,i].text(0.70, 0.93, 'zone-'+str([0,7][inwards>0]-i*(inwards)),transform=axes[0,i].transAxes, fontsize=25, color='w')#, bbox=dict(facecolor='w', edgecolor='k', pad=5.0))
+        
+    plt.savefig("../plots/snapshot.png",bbox_inches='tight')
+    plt.close()
+
+def show_tavged(also_show_rprofile=False):
+    from scipy.optimize import curve_fit
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    
+    dirtag = "043025_a0.9_rB2e5_bondi_eks" #"043025_a0.9_rB2e3_bondi_eks" #"delta/051325_a0.9_rB2e5_bondi_eks" #
+    tmax = 600 #700 #
+    average_factor = 1.25
+    perzone_avg_frac = 0.5 # TODO
+    quantity = "rho" #"Theta" #"u^r" #"K" #"sigma" #"FE_EM" #_norho" #"T^1_0"
+
+    files = sorted(glob.glob("../data/" + dirtag + "/*out*.phdf"))[::-1]
+
+    # basic info
+    dump0 = pyharm.load_dump(files[0], ghost_zones=False)
+    r_sonic = dump0["rs"]
+    mdot = dump0["mdot"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    tB = np.power(rB, 3./2)
+    n_zones = dump0["Params"]["Multizone/nzones_eff"]
+    switch_on_ncycle = dump0["Params"]["Multizone/ncycle_per_zone"] > 0
+    if switch_on_ncycle:
+        pkl = "../data_products/" + dirtag + "_profiles_all.pkl"
+        with open(pkl, "rb") as openFile:
+            D = pickle.load(openFile)
+        switch_pt = set(D["n0_zone"])
+        switch_pt = np.array(sorted(switch_pt))
+    
+    fig, ax = plt.subplots(1 + also_show_rprofile, n_zones, figsize=(8 * n_zones, 8 * (1 + also_show_rprofile))) #, sharey=True)
+    if not also_show_rprofile:
+        ax = [ax]
+    plt.subplots_adjust(wspace=0.02)
+    
+    # list initialization
+    quantity_arr = [0] * n_zones
+    num_sum = [0] * n_zones
+    rho_arr = [0] * n_zones
+    first_time = np.inf
+    last_time = np.inf
+    if quantity == "rho" or "FE" in quantity: density_weight = False
+    else: density_weight = True
+
+    start_fnum=380 #450 #180 #
+    for f in files[start_fnum:]: #start_fnum+100]:
+        dump = pyharm.load_dump(f, ghost_zones=False)
+        iwv = dump["Params"]["Multizone/i_within_vcycle"]
+        zone = abs(iwv - (n_zones - 1))
+        if dump["t"] > tmax * tB:
+            if dump["t"] < last_time: last_time = dump["t"]
+            continue
+        elif dump["t"] < tmax * tB / average_factor:
+            break
+        else:
+            switch_num = np.argwhere(switch_pt - dump["n_step"] < 0)[-1,0]
+            if (switch_pt[switch_num + 1] - dump["n_step"] <= (switch_pt[switch_num + 1] - switch_pt[switch_num]) * perzone_avg_frac):
+                if dump["t"] < first_time: first_time = dump["t"]
+                if density_weight:
+                    quantity_arr[zone] += dump[quantity] * dump["rho"]
+                    rho_arr[zone] += dump["rho"]
+                else:
+                    quantity_arr[zone] += dump[quantity]
+                num_sum[zone] += 1
+    
+    print(num_sum, last_time / tB, first_time / tB)
+    for zone in range(n_zones): 
+        if num_sum[zone] > 0:
+            if density_weight: quantity_arr[zone] /= rho_arr[zone]
+            else: quantity_arr[zone] /= num_sum[zone]
+            sz = 8**(zone+1.8)
+            #vmax = 1e-3; vmin = -vmax
+            if quantity == "rho": 
+                vmax = 1e-3; vmin=1e-10
+            elif quantity == "Theta":
+                vmax = 1e0; vmin=1e-6
+            #vmax = 1e4; vmin=1e-1
+            #vmax = 1e1; vmin=1e-6
+            #vmax = 1e-1; vmin = -vmax
+            window = (-sz, sz, -sz, sz)
+            #pyharm.plots.plot_xz(ax[zone], dump, quantity_arr[zone] * dump["gdet"], native=False, log_r=False, symlog=True, vmin=vmin, vmax=vmax, cbar=0, shading="flat", window=window, average=1) #, xlabel=native, ylabel=native)
+            pyharm.plots.plot_xz(ax[0,zone], dump, quantity_arr[zone], native=False, log_r=False, log=True, vmin=vmin, vmax=vmax, cbar=0, shading="flat", window=window, average=1, ylabel=False, yticks=[])
+
+            if rB < sz * 2 and rB > sz / 50:
+                circle1 = plt.Circle((0, 0), rB, ec='w', fill=False, ls="--", lw=5)
+                ax[0, zone].add_artist(circle1)
+            
+            if also_show_rprofile:
+                irB = np.argmin(abs(dump["r1d"] - rB))
+                mean = quantity_arr[zone].mean(axis=-1)
+                #mean = (mean + np.flip(mean, axis=1)) / 2.
+                thnorth = np.argwhere(dump["th1d"] < np.pi / 6)[:,0]
+                thsouth = np.argwhere(dump["th1d"] > np.pi * 5 / 6)[:,0]
+                thdisk = np.argwhere((dump["th1d"] < np.pi * 7 / 12) & (dump["th1d"] > np.pi * 5 / 12))[:,0]
+                #colors = plt.cm.gnuplot(np.linspace(0.9, 0., (np.shape(mean)[1])//2))
+                #for ith in range(len(colors)):
+                #    ax[1, zone].loglog(dump["r1d"], mean[:,ith], color=colors[ith])
+                #ax[1, zone].loglog(dump["r1d"], mean[:,thnorth].mean(axis=-1), color='r')
+                #ax[1, zone].loglog(dump["r1d"], mean[:,thsouth].mean(axis=-1), color='b')
+                #ax[1, zone].loglog(dump["r1d"], mean[:,thdisk].mean(axis=-1), color='g')
+
+                # fit powerlaw
+                inertial_range = np.argwhere((dump["r1d"] > 10) & (dump["r1d"] < rB / 10))[:,0]
+                colors = ['r', 'b', 'g']
+                regions = ['N', 'S', 'mid']
+                for ithselect, thselect in enumerate([thnorth, thsouth, thdisk]):
+                    selectmean = mean[:,thselect].mean(axis=-1)
+                    ax[1, zone].loglog(dump["r1d"], selectmean, color=colors[ithselect])
+                    popt, pcov = curve_fit(lin_func, np.log10(dump["r1d"][inertial_range]), np.log10((mean[:, thselect].mean(axis=-1))[inertial_range]))
+                    print("{}: slope = {:.3g} +- {:.3g}".format(regions[ithselect], popt[0], np.sqrt(np.diag(pcov)[0])))
+                    ax[1, zone].loglog(dump["r1d"][inertial_range], np.power(10, lin_func(np.log10(dump["r1d"][inertial_range]), *popt)), color=colors[ithselect], lw=10, alpha=0.2)
+                #ax[1, zone].loglog(dump["r1d"][:irB], np.power(dump["r1d"][:irB], -1) / 1e2, color='k')
+                #ax[1, zone].loglog(dump["r1d"][:irB], np.power(dump["r1d"][:irB], -1.3) / 1e4, color='m')
+
+    output = "../plots/tavged_slice.png"
+    plt.savefig(output,bbox_inches='tight')
+    print("saved to " + output)
+    plt.close()
+    
+def compare_jet_disk_rho_profile():
+    from scipy.optimize import curve_fit
+    from plotProfiles import get_mask
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    
+    dirtag = "043025_a0.9_rB2e5_bondi_eks" #"043025_a0.9_rB2e3_bondi_eks" #"delta/051325_a0.9_rB2e5_bondi_eks" #
+    tmax = 600 #700 #
+    average_factor = 1.25
+    perzone_avg_frac = 0.5 # TODO
+
+    files = sorted(glob.glob("../data/" + dirtag + "/*out*.phdf"))[::-1]
+
+    # basic info
+    dump0 = pyharm.load_dump(files[0], ghost_zones=False)
+    r_sonic = dump0["rs"]
+    mdot = dump0["mdot"]
+    rEH = dump0["r_eh"]
+    rout = dump0["r_out"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    tB = np.power(rB, 3./2)
+    n_zones = dump0["Params"]["Multizone/nzones_eff"]
+    switch_on_ncycle = dump0["Params"]["Multizone/ncycle_per_zone"] > 0
+    pkl = "../data_products/" + dirtag + "_profiles_all.pkl"
+    with open(pkl, "rb") as openFile:
+        D = pickle.load(openFile)
+    if switch_on_ncycle:
+        switch_pt = set(D["n0_zone"])
+        switch_pt = np.array(sorted(switch_pt))
+    else: print("NOT SUPPORTED")
+    mask_list = get_mask(D, False)
+    
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    
+    # list initialization
+    quantity_arr = [0] * n_zones
+    num_sum = [0] * n_zones
+    rho_arr = [0] * n_zones
+    first_time = np.inf
+    last_time = np.inf
+
+    start_fnum=380 #450 #180 #
+    for f in files[start_fnum:]: #start_fnum+100]:
+        dump = pyharm.load_dump(f, ghost_zones=False)
+        iwv = dump["Params"]["Multizone/i_within_vcycle"]
+        zone = abs(iwv - (n_zones - 1))
+        if dump["t"] > tmax * tB:
+            if dump["t"] < last_time: last_time = dump["t"]
+            continue
+        elif dump["t"] < tmax * tB / average_factor:
+            break
+        else:
+            switch_num = np.argwhere(switch_pt - dump["n_step"] < 0)[-1,0]
+            if (switch_pt[switch_num + 1] - dump["n_step"] <= (switch_pt[switch_num + 1] - switch_pt[switch_num]) * perzone_avg_frac):
+                if dump["t"] < first_time: first_time = dump["t"]
+                quantity_arr[zone] += dump["rho"]
+                num_sum[zone] += 1
+    
+    print(num_sum, last_time / tB, first_time / tB)
+    
+    # combine all zones data
+    values_combined = np.zeros(np.shape(quantity_arr[0]))
+    for zone in range(n_zones): 
+        if num_sum[zone] > 0:
+            quantity_arr[zone] /= num_sum[zone]
+            mask = mask_list[zone]
+            quantity_arr[zone][~mask] = 0.
+            values_combined += quantity_arr[zone]
+            
+    irB = np.argmin(abs(dump["r1d"] - rB))
+    mean = values_combined.mean(axis=-1)
+    
+    # th range
+    thnorth = np.argwhere(dump["th1d"] < np.pi / 6)[:,0]
+    thsouth = np.argwhere(dump["th1d"] > np.pi * 5 / 6)[:,0]
+    thdisk = np.argwhere((dump["th1d"] < np.pi * 7 / 12) & (dump["th1d"] > np.pi * 5 / 12))[:,0]
+
+    inertial_range = np.argwhere((dump["r1d"] > 10) & (dump["r1d"] < rB / 10))[:,0]
+    colors = ['r', 'b', 'g']
+    regions = ['N', 'S', 'mid']
+    for ithselect, thselect in enumerate([thnorth, thsouth, thdisk]):
+        selectmean = mean[:,thselect].mean(axis=-1)
+        ax.loglog(dump["r1d"], selectmean, color=colors[ithselect], label=regions[ithselect])
+        
+        # fit powerlaw
+        popt, pcov = curve_fit(lin_func, np.log10(dump["r1d"][inertial_range]), np.log10((mean[:, thselect].mean(axis=-1))[inertial_range]))
+        print("{}: slope = {:.3g} +- {:.3g}".format(regions[ithselect], popt[0], np.sqrt(np.diag(pcov)[0])))
+        ax.loglog(dump["r1d"][inertial_range], np.power(10, lin_func(np.log10(dump["r1d"][inertial_range]), *popt)), color=colors[ithselect], lw=10, alpha=0.1)
+
+    # show rB
+    ax.axvline(rB, color='gray', lw=1, alpha=1, ls='--')
+
+    # plot settings
+    ax.set_xlabel(r"Radius [$r_g$]")
+    ylabel = variableToLabel('rho')
+    ax.set_ylabel(ylabel)
+    ax.set_xlim([rEH, rout])
+    ax.legend()
+
+    output = "../plots/compare_jet_disk_rho_profile.png"
+    plt.savefig(output,bbox_inches='tight')
+    print("saved to " + output)
+    plt.close()
+
+if __name__ == "__main__":
+    #compare_prescription_slice()
+    #compare_evolution_rB()
+    #compare_quantity_rB()
+    #show_snapshot(3830) # 3598) #3493) #3220) #
+    compare_jet_disk_rho_profile()
+    #show_tavged(also_show_rprofile=True)

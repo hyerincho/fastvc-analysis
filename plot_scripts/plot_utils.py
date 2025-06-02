@@ -2,7 +2,12 @@ import numpy as np
 import pdb
 import pickle
 import matplotlib.pyplot as plt
+import glob
+import pyharm
 
+from matplotlib_settings import *
+import bondi_analytic as bondi
+from ylabel_dictionary import *
 
 def calc_rEH(a):
     return 1.0 + np.sqrt(1.0 - a**2)
@@ -28,6 +33,58 @@ def eta_BZ6(a, phib, kappa=0.03):
     Omega = a / (2 * rEH)
     return 0.01 * kappa * (4.0 * np.pi) * np.power(phib * Omega, 2.0) * (1.0 + 1.38 * Omega**2 - 9.2 * Omega**4)  # from percentage to decimals
 
+def thphi_average(dump,quantity,sum_instead=False,mass_weight=True, hemisphere=None):
+  if isinstance(quantity,str):
+    to_average=np.copy(dump[quantity])
+  else:
+    to_average=np.copy(quantity)
+  
+  if mass_weight:
+    to_average *= dump['rho']
+
+  if hemisphere is None:
+      j_slice = slice(None)
+  elif hemisphere == "n":
+      j_slice = slice(0, dump["n2"] // 2)
+  elif hemisphere == "s":
+      j_slice = slice(dump["n2"] // 2, dump["n2"])
+
+  if sum_instead:
+      return pyharm.shell_sum(dump,to_average, j_slice=j_slice)
+  else:
+      if mass_weight:
+          return pyharm.shell_sum(dump,to_average, j_slice=j_slice)/pyharm.shell_sum(dump,dump["rho"], j_slice=j_slice)
+      else:
+          if dump['n3']>1: #3d
+              return pyharm.shell_avg(dump,to_average, j_slice=j_slice)
+          else:
+              return np.mean(to_average[:,j_slice,:],axis=1)
+
+def phi_average(dump,quantity,sum_instead=False,mass_weight=True):
+  if isinstance(quantity,str):
+    to_average=np.copy(dump[quantity])
+  else:
+    to_average=np.copy(quantity)
+  
+  if mass_weight: weight = dump["rho"]
+  else: weight = dump["1"]
+
+  if sum_instead:
+      return np.sum(to_average, axis=2)
+  else:
+      if dump['n3']>1:
+        return np.sum(to_average * weight * np.sqrt(dump['gcov'][3,3]) * dump['dx3'], axis=2) / np.sum(weight * np.sqrt(dump['gcov'][3,3]) * dump['dx3'],axis=2)
+      else:
+        return to_average
+
+def phi_dispersion(dump,quantity):
+  if isinstance(quantity,str):
+    to_average=np.copy(dump[quantity])
+  else:
+    to_average=np.copy(quantity)
+  
+  if dump['n3']>1:
+    return np.std(to_average, axis=2)
 
 def readQuantity(dictionary, quantity):
     invert = False
@@ -53,6 +110,10 @@ def readQuantity(dictionary, quantity):
     elif quantity == "Pb":
         quantity_index = dictionary["quantities"].index("b")
         profiles = [np.array(list[quantity_index]) ** 2 / 2.0 for list in dictionary["profiles"]]
+    elif quantity == "eta":
+        quantity_index = dictionary["quantities"].index("Edot")
+        quantity_index2 = dictionary["quantities"].index("Mdot")
+        profiles = [(np.array(list[quantity_index2]) - np.array(list[quantity_index])) / np.array(list[quantity_index2]) for list in dictionary["profiles"]]
     else:
         # just reading the pre-calculated quantities
         quantity_index = dictionary["quantities"].index(quantity)
@@ -60,7 +121,7 @@ def readQuantity(dictionary, quantity):
     return profiles, invert
 
 
-def readTimeSeries(D, quantity="eta", radius=100, tmax=None):
+def readTimeSeries(D, quantity, radius=100, tmax=None):
     quantity_arr = np.array([])
     radii = D["radii"]
     times = D["times"]
@@ -72,54 +133,80 @@ def readTimeSeries(D, quantity="eta", radius=100, tmax=None):
         return quantity_arr, times
     else:
         times = np.array(times)
-        if times[-1] <= tmax:
-            print("the time series not reached tmax of {:.3g} yet".format(tmax))
-        i_keep = times < tmax
+        r_sonic = D["dump"]["rs"]
+        mdot = D["dump"]["mdot"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        tB = np.power(rB, 3./2)
+        if times[-1] <= tmax * tB:
+            print("the time series not reached tmax of {:.3g} yet".format(tmax * tB))
+        i_keep = times < tmax * tB
         return quantity_arr[i_keep], times[i_keep]
 
-
-def plot_shell_summed(ax, dump, x, var, color="k", lw=5, j_slice=slice(None), label=None, alpha=1):
-    var = np.squeeze(np.sum((var * dump["gdet"] * dump["dx2"] * dump["dx3"])[:, j_slice, :], axis=(1, 2)))
-
-    if label is None:
-        label = "__nolegend__"
-    ax.plot(x, var, color=color, lw=lw, label=label, alpha=alpha)
-    ax.plot(x, -var, color=color, lw=lw, ls=":", alpha=alpha)
-    return var
-
-
-def extractQuantity(D, quantity, average_factor=2.0):
+def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescale=False, tmax=None, radius=None):
     store_Mdot10 = False
     if quantity == "eta" or quantity == "phib":
         store_Mdot10 = True
 
+    # set radius
+    if radius is None:
+        if quantity in ["phib", "Mdot"]:
+            try:
+                a = get_spin(D)
+            except:
+                a = 0.5
+                print("ERROR: cant find spin, now using a=0.5")
+            radius = calc_rEH(a)
+        elif "Omega" in quantity:
+            temp = quantity.replace("Omega", "")
+            if len(temp) > 0:
+                radius = float(temp)
+            else:
+                radius = 5  # 10 #50
+        elif "u^r" in quantity or "u^th" in quantity or "u^phi" in quantity: radius = 10
+        else: radius = 5
+
     if quantity == "eta":
-        radius = 5
-        quantity_arr, _ = readTimeSeries(D, "Edot", radius)
-        quantity_arr2, _ = readTimeSeries(D, "Mdot", radius)
+        quantity_arr, times = readTimeSeries(D, "Edot", radius, tmax)
+        quantity_arr2, _ = readTimeSeries(D, "Mdot", radius, tmax)
     elif quantity == "eta_EM":
-        radius = 5
-        quantity_arr, _ = readTimeSeries(D, "Edot_EM", radius)
-        quantity_arr2, _ = readTimeSeries(D, "Mdot", radius)
+        quantity_arr, times = readTimeSeries(D, "Edot_EM", radius, tmax)
+        quantity_arr2, _ = readTimeSeries(D, "Mdot", radius, tmax)
     elif quantity == "phib":
-        try:
-            a = get_spin(D)
-        except:
-            a = 0.5
-            print("ERROR: cant find spin, now using a=0.5")
-        rEH = calc_rEH(a)
-        quantity_arr, _ = readTimeSeries(D, "Phib", rEH)
+        quantity_arr, times = readTimeSeries(D, "Phib", radius, tmax)
+    elif "Omega" in quantity:
+        quantity_arr, times = readTimeSeries(D, "Omega", radius, tmax)
+        quantity_arr *= np.power(radius, 3.0 / 2)
     else:
-        radius = 5
-        quantity_arr, _ = readTimeSeries(D, quantity, radius)
+        quantity_arr, times = readTimeSeries(D, quantity, radius, tmax)
 
     if store_Mdot10:
-        Mdot_save, _ = readTimeSeries(D, "Mdot", 10)
+        Mdot_save, _ = readTimeSeries(D, "Mdot", 10, tmax)
     innermost = np.array(D["zones"]) == 0  # <= 1 #
 
-    if store_Mdot10:  # 0: # divide by the time dependent Mdot  #
-        Mdot_save = Mdot_save[innermost]
-        Mdot_save = np.mean(Mdot_save[int(float(len(Mdot_save)) / average_factor) :])  # TODO: change this to time criterion by getting indices over t_half
+    r_sonic = D["dump"]["rs"]
+    mdot = D["dump"]["mdot"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    tB = np.power(rB, 3./2)
+    if tmax is None: last_time = times[-1]
+    else: last_time = tmax * tB
+
+    if rescale and quantity == "Mdot":
+        print("t={:.5g}-{:.5g}".format(last_time/average_factor, last_time))
+        Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot)[0]
+        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot)[0]
+        rho_save, _ = readTimeSeries(D, "rho", rB, tmax)
+        zones = np.array(D["zones"][:len(rho_save)])
+        rB_zone = int(np.floor(np.log(rB) / np.log(8) - 0.5))
+        i_keep = np.argwhere((times < last_time) & (times > last_time / average_factor) & (zones == rB_zone))
+        rho_save = np.mean(rho_save[i_keep])
+        print("rho_save={:.5g}, factor={:.5g}".format(rho_save, rho_analytic / (Mdot_analytic * rho_save)))
+        quantity_arr *= rho_analytic / (Mdot_analytic * rho_save)
+
+    if store_Mdot10 and use_Mdot_mean:
+        i_keep = np.argwhere((times < last_time) & (times > last_time / average_factor) & (innermost[:len(times)]))
+        Mdot_save = Mdot_save[i_keep]
+        Mdot_save = np.mean(Mdot_save)
+        print(Mdot_save)
     if quantity == "eta":
         quantity_arr = (quantity_arr2 - quantity_arr) / Mdot_save
     elif quantity == "eta_EM":
@@ -127,6 +214,88 @@ def extractQuantity(D, quantity, average_factor=2.0):
     elif quantity == "phib":
         quantity_arr /= np.sqrt(Mdot_save)
 
+    return quantity_arr, times
+
+def plot_shell_summed(ax, dump, x, var, color="k", lw=5, j_slice=slice(None), label=None, alpha=1, normalize=None, inverse=False):
+    if normalize is not None:
+        if np.shape(normalize) == np.shape(var):
+            normalize = np.squeeze(np.sum((normalize * dump["gdet"] * dump["dx2"] * dump["dx3"])[:, j_slice, :], axis=(1, 2)))
+    var = np.squeeze(np.sum((var * dump["gdet"] * dump["dx2"] * dump["dx3"])[:, j_slice, :], axis=(1, 2)))
+    if normalize is not None:
+        var /= normalize
+    if inverse: var = 1. / var
+
+    if label is None:
+        label = "__nolegend__"
+    ax.plot(x, var, color=color, lw=lw, label=label, alpha=alpha)
+    ax.plot(x, -var, color=color, lw=lw, ls=":", alpha=alpha)
+    return var
+
+def extractQuantity(D, quantity, average_factor=2.0, return_mean=True, use_Mdot_mean=True):
+    # extract steady state of the quantity
+    quantity_arr, _ = processTimeSeries(D, quantity, use_Mdot_mean=use_Mdot_mean, average_factor=average_factor)
+    innermost = np.array(D["zones"]) == 0  # <= 1 #
     quantity_arr = quantity_arr[innermost]
-    mean = np.mean(quantity_arr[int(float(len(quantity_arr)) / average_factor) :])
-    return mean
+    quantity_arr = quantity_arr[int(float(len(quantity_arr)) / average_factor) :]
+    if return_mean: return np.mean(quantity_arr)
+    else: return quantity_arr
+
+def extract_rth_info(fnames, quantity, radii, num_files=-1, which="phiav"):
+    # each dumps midplane slice
+    #fnames = sorted(glob.glob('../data/' + dirtag + '/*out0.*.phdf'))
+    if num_files == -1: num_files = len(fnames) // 2
+    if which == 'phiweight': dtype = 'complex_'
+    else: dtype = float
+    quantity_arr = np.zeros((len(radii), num_files), dtype=dtype)
+    for j, fname in enumerate(fnames[-num_files:]): # -1000
+        dump = pyharm.load_dump(fname, ghost_zones=False)
+        if which == "phiav": temp = phi_average(dump, quantity)
+        elif which == "phistd": temp = phi_dispersion(dump, quantity)
+        elif which == "max": temp = np.max(dump[quantity], axis=(1,2))
+        elif which == "avg": temp = thphi_average(dump, quantity)
+        elif which == "signedavg":
+            temp = np.copy(dump[quantity])
+            temp[:,:np.shape(temp)[1] // 2,:] *= -1 # north hemisphere is multiplied a negative sign
+            temp = thphi_average(dump, temp) #, mass_weight=False)
+        elif which == "phiweight":
+            temp = np.copy(dump[quantity])
+            temp = temp * np.exp(1j * dump["phi"])
+            temp = thphi_average(dump, temp, hemisphere='n') # only focus on north hemisphere for now
+            #temp = np.abs(temp) # look at abs value for now
+        for i, radius in enumerate(radii):
+            i_r = np.argmin(abs(dump["r1d"] - radius))
+            if "phi" in which and which != "phiweight": quantity_arr[i][j] = temp[i_r, dump["nx2"]//2]
+            else: quantity_arr[i][j] = temp[i_r]
+            if quantity == "Omega": quantity_arr[i][j] *= np.power(dump["r1d"][i_r], 3./2)
+    return quantity_arr
+
+def extract_shellsum(fnames, quantity, radii, num_files=-1):
+    # each dumps shell sum
+    #fnames = sorted(glob.glob('../data/' + dirtag + '/*out0.*.phdf'))
+    if num_files == -1: num_files = len(fnames) // 2
+    quantity_arr = np.zeros((len(radii), num_files))
+
+    Mdot_save = False
+    if ("eta" in quantity and quantity != "beta") or quantity == "phib":
+        Mdot_save = True
+    for j, fname in enumerate(fnames[-num_files:]): # -1000
+        dump = pyharm.load_dump(fname, ghost_zones=False)
+        if Mdot_save: Mdot = -pyharm.shell_sum(dump, "FM")
+        if quantity == "eta":
+            Edot = -pyharm.shell_sum(dump, "FE")
+            summed = (Mdot - Edot) / Mdot
+        else:
+            print("WARNING, not supported")
+        for i, radius in enumerate(radii):
+            i_r = np.argmin(abs(dump["r1d"] - radius))
+            quantity_arr[i][j] = summed[i_r]
+    return quantity_arr
+
+def corr(t1, t2):
+    # t1 and t2 are time series
+    f1 = np.fft.fftshift(np.fft.fft(t1))
+    f2 = np.fft.fftshift(np.fft.fft(t2))
+
+    p_f = np.conj(f1) * f2
+    p_t = np.fft.ifft(np.fft.fftshift(p_f))
+    return p_t

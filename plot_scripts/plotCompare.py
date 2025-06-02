@@ -7,7 +7,7 @@ from plot_utils import *
 from ylabel_dictionary import *
 
 
-def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_dir=None, row=None, figsize=None, xlim=None, passed_fig_ax=None, tmax=None, rescale=False, time_bin_factor=2):
+def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_dir=None, row=None, figsize=None, xlim=None, passed_fig_ax=None, tmax=None, rescale=False, time_bin_factor=2, show_rb=False, perzone_avg_frac=0.5, verbose=False, prioritize_inner=False):
     matplotlib_settings()
 
     if len(quantities) <= 3:
@@ -45,10 +45,10 @@ def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_
             fig, axes = fig_ax
             # ax1d = axes.reshape(-1)
             # for j, quantity in enumerate(quantities):
-            fig_ax = old_script.plotProfiles(pkl_name, quantities, zone_time_average_fraction=0.5, fig_ax=fig_ax, num_time_chunk=1, color=colors[i], label=labels[i], rescale_Mdot=rescale, average_factor=time_bin_factor)
+            fig_ax = old_script.plotProfiles(pkl_name, quantities, zone_time_average_fraction=perzone_avg_frac, fig_ax=fig_ax, num_time_chunk=1, color=colors[i], label=labels[i], rescale_Mdot=rescale, average_factor=time_bin_factor)
             # fig_ax = (fig, axes)
         else:
-            fig_ax = plotProfiles(pkl_name, quantities, plot_dir=plot_dir, perzone_avg_frac=1, num_time_chunk=1, fig_ax=fig_ax, color_list=[colors[i]], label=labels[i], linestyle=linestyles[i], tmax=tmax[i], rescale=rescale, time_bin_factor=time_bin_factor)
+            fig_ax = plotProfiles(pkl_name, quantities, plot_dir=plot_dir, perzone_avg_frac=perzone_avg_frac, num_time_chunk=1, fig_ax=fig_ax, color_list=[colors[i]], label=labels[i], linestyle=linestyles[i], tmax=tmax[i], rescale=rescale, time_bin_factor=time_bin_factor, show_rb=show_rb, legend_all=False, verbose=verbose, prioritize_inner=prioritize_inner)
 
     if xlim is not None:
         if len(np.shape(fig_ax[1])) > 1:
@@ -164,34 +164,42 @@ def compareSpin(a=0.5, time_bin_factor=2):
     if a == 0.9:
         dirtagList = [
             # "030325_a0.9_oz_128",
-            "delta/030525_a0.9_oz",
-            "042125_a0.9_oz_jks",
-            "031125_a0.9_cap_correctly",
-            "042125_n4_a0.9_bondi_jks2",
+            #"delta/030525_a0.9_oz",
+            "051225_oz_a0.9_bondi_newflr",
+            #"042125_a0.9_oz_jks",
+            #"031125_a0.9_cap_correctly",
+            "051225_n4_a0.9_bondi_newflr",
+            #"042125_n4_a0.9_bondi_jks2",
             # "042225_n4_a0.9_bondi_jks2_clearangle",
-            "delta/032025_a0.9_oz_clearangle",
-            "032125_n4a0.9_toriilike",
-            "041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
-            "042225_n4_a0.9_retrograde",
+            #"delta/032025_a0.9_oz_clearangle",
+            "051225_oz_a0.9_toriilike_newflr",
+            #"032125_n4a0.9_toriilike",
+            "051225_n4_a0.9_toriilike_newflr",
+            #"041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
+            #"042225_n4_a0.9_retrograde",
+            "051225_n4_a-0.9_toriilike_eks",
             # "042325_n4_a0.9_tl_uphi0",
-            "042225_n4_a0.9_toriilike_jks2_nocap",
-            # "042225_n4_a0.9_bondi_jks2_nocap"
+            #"042225_n4_a0.9_toriilike_jks2_nocap",
+            "051225_n4_a0.9_torrilike_nocap_newflr",
+            "052825_n4_a-0.9_torilike_nocap_newflr"
+            #"042225_n4_a0.9_bondi_jks2_nocap"
             # "040325_n4_a0.9_torrilike_nocap"
         ]
-        oz_num = len(dirtagList)  # just so that I don't have a time cap
-        colorList = ["black", "tab:blue", "c", "g", "r", "tab:orange", "m", "y", "pink", "gray"]  # colors for each runs
-        labelList = ["oz", "oz_jks", "mz", "mz_jks", "oz_tl", "mz_tl", "mz_tl_jks", "mz_tl_-.9", "mz_tl_nocap"]  # "mz_jks_ca", "mz_tl_0",
-        plot_dir = "../plots/042125_spin_" + str(a)
+        oz_num = len(dirtagList)  #2 # just so that I don't have a time cap
+        colorList = ["black", "k", "b", "b", "r", "c", "pink", "gray"]  # colors for each runs "tab:blue", "g", "m", 
+        linestyleList = ['solid', "dashed", "solid", "dashed", "dashed", "dashed", "dashed"]
+        labelList = ["oz", "mz", "oz_tl", "mz_tl", "mz_tl-.9", "mz_tl_nocap", "mz_tl-.9_nocap", "mz_nocap"]  # "mz_jks_ca", "mz_tl_0","oz_jks", "mz_jks", "mz_tl_jks", 
+        plot_dir = "../plots/n4_spin_" + str(a)
 
     # quantityList = ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "Omega", "T"] #"Omega"["Mdot", "eta", "eta_Fl", "eta_EM"] #
-    quantityList = ["beta", "eta", "phib", "Omega"]  # , "T"] #
+    quantityList = ["eta", "phib", "beta"] #, "Mdot"] # "Omega"]  # , "T"] #
     if a == None:
         rEH = 2  # just use a=0 rEH
     else:
         rEH = calc_rEH(a)
     xlim = (rEH, 3e4)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[2e5] * (len(dirtagList) - oz_num) + [None] * oz_num, rescale=True, time_bin_factor=time_bin_factor)  # tmax 4e5
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[50, 50, 50, 50, 50, 300, 300], rescale=True, time_bin_factor=time_bin_factor, show_rb=True, figsize=(24,5.5), prioritize_inner=True)  # tmax 4e5
 
 
 def compareSpinTimeAverages(quantity="phib", tmax=None, average_factor=2, show_RN22=False):
@@ -311,8 +319,8 @@ def comparePrescriptions(a=0.5):
         ]
         labelList = ["oz_128", "b2_safe", "b2", "b2_n10"]  # "reconnect", "b8_safe", "b8", "b8_n200",
     elif a == 0.9:
-        dirtagList = ["010925_a0.9_oz_128", "022625_a0.9_n4_noreconnect", "022625_a0.9_n4"]
-        labelList = ["128", "b8_noreconnect", "b8"]  # "reconnect",
+        dirtagList = ["041625_n4_a0.9_toriilike_jks2_smth2_reconnect", "043025_n4_a0.9_bondi_bflux0"]
+        labelList = ["bfluxc", "bflux0"]
 
     colorList = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList)))  # colors for each runs
     linestyleList = ["solid"] * (len(dirtagList))
@@ -325,7 +333,7 @@ def comparePrescriptions(a=0.5):
         rEH = calc_rEH(a)
     xlim = (rEH, 3e4)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=3e5, rescale=True)  # tmax 4e5
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=50, rescale=True, time_bin_factor=1.25)
 
 
 def compareN8Spin(a=None, time_bin_factor=2):
@@ -394,7 +402,7 @@ def compareN8Spin(a=None, time_bin_factor=2):
         compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=None, rescale=True, time_bin_factor=time_bin_factor)
 
 
-def compareN8OldVsNew(time_bin_factor=2):
+def compareN8OldVsNew(time_bin_factor=2, tmax=None):
     dirtagList = [
         # "../../kharma_multizone_analysis/data_products/2023/082423_n8",
         "../../kharma_multizone_analysis/data_products/2023/110223_mhd_wks",
@@ -412,8 +420,9 @@ def compareN8OldVsNew(time_bin_factor=2):
         # "032025_a0.0_toriilike",
         # "040225_a0.0_fofc",
         # "040925_a0.0_fofc_noehbuffer"
-        "042125_a0.0_rB2e5_jks2",
+        #"042125_a0.0_rB2e5_jks2",
         "042425_a0.0_rB2e5_bondi_jks2",
+        "051325_a0.0_rB2e5_eks"
     ]
     labelList = [
         # "cell_082423",
@@ -429,19 +438,20 @@ def compareN8OldVsNew(time_bin_factor=2):
         # "face_safe_longtin20",
         # "face_safe_longtin10_nocap",
         # "face_safe_longtin4_nocap",
-        "face_toriilike",
+        #"face_toriilike",
         # "face_fofc"
         "face_jks",
+        "face_eks",
     ]  # "reconnect", "b8_safe", "b8", "b8_n200",
     colorList = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList)))  # colors for each runs
     linestyleList = ["solid"] * (len(dirtagList))
     plot_dir = "../plots/030525_n8a0oldvsnew"
 
-    quantityList = ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "u^r", "T"]  # "Omega"
+    quantityList = ["Mdot", "rho", "beta", "eta", "etaMdot", "T"]  # "Omega"
     rEH = 2  # just use a=0 rEH
     xlim = (rEH, 1e8)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=None, rescale=True, time_bin_factor=time_bin_factor)
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=600, rescale=True, time_bin_factor=time_bin_factor)
 
 
 def compareMdotEta(a=None, time_bin_factor=2.0, rescale=False):
@@ -495,7 +505,8 @@ def compareMdotEta(a=None, time_bin_factor=2.0, rescale=False):
 
         a = get_spin(D)
         r_sonic = D["dump"]["rs"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic)[0]
+        mdot = D["dump"]["mdot"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
         if D["dump"]["parthenon/job/problem_id"] == "torus":
             is_torus = True
         else:
@@ -558,42 +569,55 @@ def compareMdotEta(a=None, time_bin_factor=2.0, rescale=False):
     print("saved to " + output)
 
 
-def compareCoords(time_bin_factor=2):
+def compareCoords(time_bin_factor=2, tmax=None):
+    matplotlib_settings()
     linestyleList = None
     dirtagList = [
-        "032125_n4a0.9_toriilike",
-        # "041625_n4_a0.9_toriilike_jks_reconnect",
-        "041625_n4_a0.9_toriilike_jks2_reconnect",
+        "051225_n4_a0.9_toriilike_newflr",
         "041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
-        # "041625_n4_a0.9_toriilike_jks2_smth3_reconnect",
-        "041625_n4_a0.9_toriilike_jks2_smth5_reconnect",
+        #"043025_a0.9_rB2e5_bondi_eks",
+        #"042325_a0.9_rB2e5_bondi",
     ]
-    labelList = ["eks", "jks1", "2", "5"]  #
+    labelList = ["mz_tl", "mz_tl_jks"] #, "2", "5"]  #
     # dirtagList = [
-    #    "040625_a0.9_rB2e3",
-    #    "041625_a0.9_rB2e3_jks2",
     #    "041625_a0.9_rB2e3_jks2_smth3",
     #    "041725_a0.9_rB2e3_jks2_smth2",
     #        ]
     # labelList = ["eks", "jks1", "3", "2"]
 
-    colorList = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList)))  # colors for each runs
+    colorList = ['b', 'g'] #plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList)))  # colors for each runs
     linestyleList = ["solid"] * (len(dirtagList))
-    plot_dir = "../plots/041725_compare_coords"
+    plot_dir = "../plots/n4_compare_coords"
 
-    quantityList = ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "u^r", "T"]  # ["Mdot", "eta", "eta_Fl", "eta_EM"] #"Omega"
+    quantityList = ["eta"] #["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "u^r", "T"]  # ["Mdot", "eta", "eta_Fl", "eta_EM"] #"Omega"
     dirtag = dirtagList[0]
     pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
     with open(pkl_name, "rb") as openFile:
         D = pickle.load(openFile)
     a = get_spin(D)
     rEH = calc_rEH(a)
-    xlim = (rEH, 3e4)
+    xlim = (rEH, 3e4) #3e5) #
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[None] * (len(dirtagList)), rescale=True, time_bin_factor=time_bin_factor)  # tmax 4e5
+    if len(quantityList) == 1:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+        compareRuns(dirtagList, ["eta_EM"], colorList, labels=["__nolegend__"] * len(dirtagList), plot_dir=plot_dir, xlim=xlim, linestyles=["dashed"] * (len(dirtagList)), tmax=tmax, rescale=False, time_bin_factor=time_bin_factor, passed_fig_ax=(fig, np.array([ax])), prioritize_inner=True)
+        compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=tmax, rescale=False, time_bin_factor=time_bin_factor, passed_fig_ax=(fig, np.array([ax])), show_rb=True, prioritize_inner=True)
+
+        # label EM
+        ax.text(1.8e2, 1e-1, r"$\eta_{\rm EM}$", color='b')
+        ax.text(3e3, 1e-1, r"$\eta_{\rm EM}$", color='g')
+
+        # save plot
+        os.makedirs(plot_dir, exist_ok=True)
+        output = plot_dir + "/" + plot_dir.split("/")[-1] + "_comparison.png"
+        plt.savefig(output, bbox_inches="tight")
+        plt.close()
+        print("saved to " + output)
+    else:
+        compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[None] * (len(dirtagList)), rescale=True, time_bin_factor=time_bin_factor)  # tmax 4e5
 
 
-def compareRB(a=0.9, time_bin_factor=2):
+def compareRB(a=0.9, time_bin_factor=2, tmax=None):
     linestyleList = None
     if a == 0.0:
         dirtagList = ["042125_a0.0_rB2e3_jks2", "042125_a0.0_rB2e5_jks2"]
@@ -612,47 +636,55 @@ def compareRB(a=0.9, time_bin_factor=2):
         colorList = ["black", "tab:blue", "c", "r", "tab:orange", "m", "g"]  # colors for each runs
     if a == 0.9:
         dirtagList = [
+            ## EKS
+            "051225_n4_a0.9_bondi_nocap_newflr",
+            "043025_a0.9_rB2e3_bondi_eks",
+            "delta/051325_a0.9_rB2e5_bondi_eks",
+            "043025_a0.9_rB2e5_bondi_eks",
+            ## JKS
+            #"042225_n4_a0.9_bondi_jks2_nocap",
+            #"042325_a0.9_rB2e3_bondi",
+            #"042325_a0.9_rB2e5_bondi",
             # "040325_n4_a0.9_torrilike_nocap",
             # "042225_n4_a0.9_toriilike_jks2_nocap",
-            "042225_n4_a0.9_bondi_jks2_nocap",
-            # "042125_n4_a0.9_bondi_jks2",
+            #"042125_n4_a0.9_bondi_jks2",
             # "041725_a0.9_rB2e3_jks2_smth2",
             # "041625_a0.9_rB2e3_jks2_smth3",
-            "042325_a0.9_rB2e3_bondi",
-            # "041825_a0.9_rB2e5_jks2_smth2"
+            #"042325_a0.9_rB2e3_bondi",
             # "041725_a0.9_rB2e5_jks2_smth2.5",
-            "042825_a0.9_rB2e4_bondi_rot",
-            "042325_a0.9_rB2e5_bondi",
+            #"042825_a0.9_rB2e4_bondi_rot",
+            #"041825_a0.9_rB2e5_jks2_smth2",
             # "042725_a0.9_rB2e5_bondi_rot",
         ]
-        labelList = ["400", "2000", "2e4", "2e5"]
-        colorList = ["black", "tab:blue", "c", "r", "tab:orange", "m", "g"]  # colors for each runs
+        labelList = ["4e2", "2e3", "2e4", "2e5", "2e5_jks", "2e5_tl"] #, "2e4"
+        #colorList = ["black", "tab:blue", "c", "g", "tab:orange", "m", "r"]  # colors for each runs
+        colorList = plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtagList)))
     plot_dir = "../plots/042225_compareRB_spin_" + str(a)
 
-    quantityList = ["eta", "beta", "Mdot", "rho"]  # ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "Omega", "T"] #"Omega"
+    quantityList = ["eta", "T"] #, "Mdot"]  # ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "Omega", "T"] #"Omega"
     if a == None:
         rEH = 2  # just use a=0 rEH
     else:
         rEH = calc_rEH(a)
     xlim = (rEH, 1e8)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[None] * (len(dirtagList)), rescale=True, time_bin_factor=time_bin_factor)  #
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=tmax, rescale=True, time_bin_factor=time_bin_factor, verbose=True, show_rb=True, perzone_avg_frac=0.5)  #0.05
 
 
 def _main():
-    # compareFvcVsOld()
-    # compareN4Beta()
-    # compareSpin(0.9, time_bin_factor=1.1) #1.5) #
-    # compareN8Spin(None, time_bin_factor=2) #0.5)
-    # compareN8OldVsNew(2)
-    # comparePrescriptions() #0.9)
-    # compareMdotEta(time_bin_factor=2, rescale=True)
-    # compareCoords(time_bin_factor=2)
-    compareRB(0.5, time_bin_factor=1.5)  # 1.05) #1.5) #1.8) #
+    compareSpin(0.9, time_bin_factor=1.25) #1.5) #
+    #compareCoords(time_bin_factor=1.25, tmax=50) #1.2)
+    #compareRB(0.9, time_bin_factor=1.25, tmax=[400, 700, 700, 600, 600]) #1.25)  # 2.) #
 
     tmax = 2e5  # None #4.5e5 #
     # compareSpinTimeAverages('phib', show_RN22=True, tmax=tmax, average_factor=2)
     # compareSpinTimeAverages('eta', show_RN22=True, tmax=tmax, average_factor=1.5)
+    #compareN8Spin(None, time_bin_factor=2) #0.5)
+    #compareN8OldVsNew(2) #1.25)
+    #comparePrescriptions(0.9)
+    # compareMdotEta(time_bin_factor=2, rescale=True)
+    # compareFvcVsOld()
+    # compareN4Beta()
 
 
 if __name__ == "__main__":
