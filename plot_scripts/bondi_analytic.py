@@ -113,7 +113,9 @@ def get_quantity_for_rarr(rarr,quantity,rs=np.power(10.,2.5),mdot=1.):
         urarr=C1/(np.power(rarr,2)*np.power(Tarr,n))
         return urarr
     elif quantity=="Mdot":
-        return C1*4.*np.pi*np.ones(np.shape(rarr))
+        if mdot == 1:
+            return C1*4.*np.pi*np.ones(np.shape(rarr))
+        else: return mdot * np.ones(np.shape(rarr))
     elif quantity=='vr':
     #elif quantity=='u^r':
         urarr=C1/(np.power(rarr,2)*np.power(Tarr,n))
