@@ -73,7 +73,10 @@ def plotEvolution(pkl, ax_passed=None, quantity="eta", average_factor=2, xaxis_t
             else:
                 print("NOT SUPPORTED YET")
             mask = np.isfinite(quantity_arr)
-            ax.semilogy(xaxis[mask], quantity_arr[mask], color=color, label=label, marker='.', markersize=10) #, ls='None')
+            if "Omega" in quantity:
+                ax.plot(xaxis[mask], quantity_arr[mask], color=color, label=label, marker='.', markersize=10)
+                ax.axhline(0, color='k', ls=':')
+            else: ax.semilogy(xaxis[mask], quantity_arr[mask], color=color, label=label, marker='.', markersize=10) #, ls='None')
         else: 
             ax.semilogy(xaxis, quantity_arr, color=color, label=label)
             if show_negative: ax.semilogy(xaxis, -quantity_arr, color=color, ls=":")
@@ -328,31 +331,30 @@ if __name__ == "__main__":
     #dirtag = "031125_a0.9_cap_correctly"
     dirtag="032125_n4a0.9_toriilike"
     dirtag="041625_n4_a0.9_toriilike_jks2_smth2_reconnect"
-    #dirtag = "041825_a0.9_rB2e5_jks2_smth2"
-    # dirtag="042125_n4_a0.5_jks2"
-    #dirtag="042125_a0.9_oz_jks"
-    #dirtag="042125_n4_a0.9_bondi_jks2"
-    #dirtag="042225_n4_a0.9_toriilike_jks2_nocap"
-    #dirtag="042225_n4_a0.9_bondi_jks2_nocap"
-    #dirtag="042225_n4_a0.9_retrograde"
     dirtag = "042325_a0.9_rB2e5_bondi"
     #dirtag="043025_a0.9_rB2e3_bondi_eks"
     #dirtag="050625_a0.9_rB2e5_oz_test"
     #dirtag="051225_a0.5_rB2e5_toriilike_beta1"
-    #dirtag="051225_n4_a0.9_bondi_nocap_newflr"
+    #dirtag="051225_n4_a0.9_torrilike_nocap_newflr"
     #dirtag="051225_n4_a-0.9_toriilike_eks"
+    #dirtag="051225_oz_a0.9_toriilike_newflr"
+    #dirtag="051225_oz_a0.9_bondi_newflr"
+    #dirtag="051225_n4_a0.9_toriilike_newflr"
+    #dirtag="051225_n4_a0.9_bondi_newflr"
     #dirtag="delta/051325_a0.9_rB2e5_bondi_eks"
     #dirtag="051325_a0.0_rB2e5_eks"
     #dirtag="052125_torus_noehbuffer_noismr_a0.5"
-    dirtag="052725_torus_noehbuffer_noismr_a0.5_diffflr"
+    #dirtag="052725_torus_noehbuffer_noismr_a0.5_diffflr"
     #dirtag="052825_a0.9_rB2e5_bondi_eks_largerout"
     #dirtag="052825_n4_a-0.9_torilike_nocap_newflr"
     #dirtag="052925_a0.0_rB2e5_eks_largerout"
+    #dirtag="060525_n4_a0_bondi_nocap_newflr"
+    dirtag="060925_n4_a0.9_bondi_rot+"
     pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
 
     average_factor = 1.25 #1.5  # 2 #
     quantities = ["Mdot", 'eta', 'Omega10', 'phib'] #["Mdot", "eta", "phib"]  # 
-    plotEvolutionMultipanel(pkl_name, quantities=quantities, average_factor=average_factor, xaxis_t=False)  # True) #
+    plotEvolutionMultipanel(pkl_name, quantities=quantities, average_factor=average_factor, xaxis_t=True) #False)  # 
     #for q2 in ['Mdot']: #'inv_abs_u^th', 'Omega2', 'Omega5', 'Omega10', 'Omega50', 'phib']:
     #    plotCorrelation(pkl_name, q1='eta', q2=q2) #, last_factor=1.2)
     #plotOmegaEvolution(pkl_name)

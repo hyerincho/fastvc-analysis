@@ -408,14 +408,15 @@ def plotProfiles(
 
         if show_init and ((quantity == "rho" and not flatten_rho) or quantity == "T" or quantity == "beta" or quantity == "u^r"):
             plotIC(ax, D, quantity)
-        if show_rscale or show_rb:
+        if show_rscale or (show_rb is not False):
             if show_rscale and quantity == 'phib':
                 rarr = np.logspace(2, np.log10(rB), 20)
                 factor = 0.5
                 ax.plot(rarr, np.power(rarr, 1) * factor, "g-", alpha=0.5, lw=2)
                 ax.text(rarr[len(rarr) // 2], np.power(rarr[len(rarr) // 2], 1) * factor / 3, r"$r^{1}$")
-            if show_rb:
-                if num_time_chunk==1: color=color_list[0]
+            if show_rb == True or show_rb == 'grey':
+                if show_rb == 'grey': color ='grey'
+                elif num_time_chunk==1: color=color_list[0]
                 else: color='grey'
                 ax.axvline(rB, color=color, lw=1, alpha=1, ls='--')
 
@@ -488,6 +489,8 @@ if __name__ == "__main__":
     pkl_name = "../data_products/051225_n4_a-0.9_toriilike_eks_profiles_all.pkl"
     pkl_name = "../data_products/051325_a0.0_rB2e5_eks_profiles_all.pkl"
     #pkl_name = "../data_products/delta/051325_a0.9_rB2e5_bondi_eks_profiles_all.pkl"
+    pkl_name = "../data_products/052925_a0.0_rB2e5_eks_largerout_profiles_all.pkl"
+    #pkl_name = "../data_products/060525_n4_a0_bondi_nocap_newflr_profiles_all.pkl"
 
     plot_dir = "../plots/test"  # common directory
     os.makedirs(plot_dir, exist_ok=True)
@@ -509,4 +512,4 @@ if __name__ == "__main__":
         "phib",
     ]
     print(pkl_name)
-    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=.5, num_time_chunk=4, time_bin_factor=1.25, rescale=True, show_init=True, show_rscale=False, flatten_rho=False, tmax=600)
+    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=.5, num_time_chunk=4, time_bin_factor=1.25, rescale=True, show_init=True, show_rscale=False, flatten_rho=False, tmax=400) #600)

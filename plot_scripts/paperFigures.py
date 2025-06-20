@@ -42,6 +42,7 @@ def compare_prescription_slice():
                     mutation_scale=20,
                     color="black")
         fig.patches.append(arrow)
+        fig.text(0.5, 0.52, r'$8000~\Delta t$', ha='center')
         output = "../plots/compare_prescription_slice_" + labels[i] + ".png"
         plt.savefig(output, bbox_inches="tight")
         print("saved to " + output)
@@ -50,24 +51,26 @@ def compare_prescription_slice():
 def compare_evolution_rB():
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
-    quantities = ["Mdot", "eta", "phib"]
+    quantities = ["Mdot", "eta", "phib"] #, "Omega"]
     figsize = (24, 5 * len(quantities))
     fig, ax = plt.subplots(len(quantities), 1, figsize=figsize, sharex=True)
     if len(quantities) == 1: ax = [ax]
     plt.subplots_adjust(wspace=0., hspace=0)
 
     dirtags = [
+        #"060525_n4_a0_bondi_nocap_newflr",
         "051225_n4_a0.9_bondi_nocap_newflr",
         "043025_a0.9_rB2e3_bondi_eks",
         "delta/051325_a0.9_rB2e5_bondi_eks",
         "043025_a0.9_rB2e5_bondi_eks",
+        #"052825_a0.9_rB2e5_bondi_eks_largerout",
         #"051325_a0.0_rB2e5_eks",
         #"042325_a0.9_rB2e5_bondi",
         ]
 
     colors = plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtags)))
-    tmaxs = [400, 700, 700, 600, 400] 
-    labels = ["400", "2e3", "2e4", "2e5", "2e5_a0", "2e5_jks"]
+    tmaxs = [400, 700, 700, 600, 150] 
+    labels = ["4e2", "2e3", "2e4", "2e5", "2e5jks", "2e5new", "2e5_a0"]
     for i, dirtag in enumerate(dirtags):
         pkl = "../data_products/" + dirtag + "_profiles_all.pkl"
         with open(pkl, "rb") as openFile:
@@ -108,17 +111,20 @@ def compare_quantity_rB():
     plt.subplots_adjust(wspace=0., hspace=0)
 
     dirtags = [
+        "060525_n4_a0_bondi_nocap_newflr",
         "051225_n4_a0.9_bondi_nocap_newflr",
         "043025_a0.9_rB2e3_bondi_eks",
         "delta/051325_a0.9_rB2e5_bondi_eks",
         "043025_a0.9_rB2e5_bondi_eks",
-        #"051325_a0.0_rB2e5_eks",
+        "052925_a0.0_rB2e5_eks_largerout",
         ]
     
     time_bin_factor = 1.25
     perzone_avg_frac = 0.5
-    colors = list(plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtags)))) # + ['k']
-    tmaxs = [400, 700, 700, 600, 400]
+    colors = list(plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtags)-2))) # + ['k']
+    colors = [colors[0]] + colors
+    colors = colors + [colors[-1]]
+    tmaxs = [400, 400, 700, 700, 600, 700] #400]
     for i, dirtag in enumerate(dirtags):
         pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
         print(pkl_name)
@@ -142,7 +148,7 @@ def compare_quantity_rB():
             q_out = profiles[0][i_r]
             print("at r={:.5g}, {}={:.5g}".format(radii[0][i_r], quantity, profiles[0][i_r]))
             mfc=colors[i]
-            #if i == len(dirtags) - 1: mfc = 'none'
+            if i == 0 or i == len(dirtags) - 1: mfc = 'none'
             ax[j].plot(rB, q_out, color=colors[i], marker='.', ms=20, markerfacecolor=mfc)
 
     # Cho+24 scaling
@@ -158,10 +164,12 @@ def compare_quantity_rB():
     for ax_temp in ax:
         ax_temp.set_xlabel(r'$R_B$ [$r_g$]')
     ax[0].axhline(1, color='k', ls=":")
+    ax[1].text(70, 0.3, r'$a_*=0.9$', color='grey', fontsize=15)
+    ax[1].text(70, 0.03, r'$a_*=0.0$', color='grey', fontsize=15)
     ax[1].axhspan(0.1, 1, color='g', alpha=0.1)
     #ax[2].set_ylim([10, 100])
     ax[0].set_ylabel(r"$\overline{\dot{M}}(r_H)$ [$\dot{M}_B$]")
-    ax[1].set_ylabel(r'$\eta(R_B)$')
+    ax[1].set_ylabel(r'$\overline{\eta}(R_B)$')
 
     # save
     output = "../plots/compare_quantity_rB.png"
@@ -197,6 +205,7 @@ def show_snapshot(fnum):
     dirtag = "043025_a0.9_rB2e5_bondi_eks"
     fn = glob.glob("../data/" + dirtag + "/*{:05d}*.phdf".format(fnum))[0]
     dump = pyharm.load_dump(fn,ghost_zones=False)
+    print(dump["n_step"])
     r_sonic = dump["rs"]
     mdot = dump["mdot"]
     rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
@@ -234,15 +243,18 @@ def show_snapshot(fnum):
             
             # show B fields
             at_i = np.argmin(abs(dump["r1d"] - sz * 1.5))
-            overlay_field(axes[1,i], dump, half_cut=True,nlines=15, reverse=True, i_slice=slice(0, at_i), color='k')#, sum=False)
+            #overlay_field(axes[1,i], dump, half_cut=True,nlines=15, reverse=True, i_slice=slice(0, at_i), color='k')#, sum=False)
 
             # show RB
             for j in range(2): 
-                if rB < sz * 2 and rB > sz / 50:
+                if i >= 4:
                     circle1 = plt.Circle((0, 0), rB, ec='grey', fill=False, ls="--", lw=3)
                     axes[j,i].add_artist(circle1)
-                if i == 4:
-                    axes[j,i].text(-sz*0.9, sz*0.3, r'$R_B$', color='grey', fontsize=30)
+                    if i==4: axes[j,i].text(-sz*0.9, sz*0.3, r'$R_B$', color='grey', fontsize=30)
+                if i == 5:
+                    circle1 = plt.Circle((0, 0), 5*rB, ec='grey', fill=False, ls=":", lw=3)
+                    axes[j,i].add_artist(circle1)
+                    axes[j,i].text(-sz*0.95, sz*0.3, r'$5\,R_B$', color='grey', fontsize=30)
         
             patch_sz[i] = sz
     
@@ -273,7 +285,7 @@ def show_tavged(also_show_rprofile=False):
     tmax = 600 #700 #
     average_factor = 1.25
     perzone_avg_frac = 0.5 # TODO
-    quantity = "rho" #"Theta" #"u^r" #"K" #"sigma" #"FE_EM" #_norho" #"T^1_0"
+    quantity = "Theta" #"rho" #"u^r" #"K" #"sigma" #"FE_EM" #_norho" #"T^1_0"
 
     files = sorted(glob.glob("../data/" + dirtag + "/*out*.phdf"))[::-1]
 
@@ -307,7 +319,7 @@ def show_tavged(also_show_rprofile=False):
     else: density_weight = True
 
     start_fnum=380 #450 #180 #
-    for f in files[start_fnum:]: #start_fnum+100]:
+    for f in files[start_fnum:start_fnum+100]:
         dump = pyharm.load_dump(f, ghost_zones=False)
         iwv = dump["Params"]["Multizone/i_within_vcycle"]
         zone = abs(iwv - (n_zones - 1))
@@ -365,8 +377,8 @@ def show_tavged(also_show_rprofile=False):
 
                 # fit powerlaw
                 inertial_range = np.argwhere((dump["r1d"] > 10) & (dump["r1d"] < rB / 10))[:,0]
-                colors = ['r', 'b', 'g']
-                regions = ['N', 'S', 'mid']
+                colors = ['r', 'b', 'k']
+                regions = ['N', 'S', 'M']
                 for ithselect, thselect in enumerate([thnorth, thsouth, thdisk]):
                     selectmean = mean[:,thselect].mean(axis=-1)
                     ax[1, zone].loglog(dump["r1d"], selectmean, color=colors[ithselect])
@@ -381,16 +393,17 @@ def show_tavged(also_show_rprofile=False):
     print("saved to " + output)
     plt.close()
     
-def compare_jet_disk_rho_profile():
+def compare_jet_disk_profile():
     from scipy.optimize import curve_fit
     from plotProfiles import get_mask
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
     
-    dirtag = "043025_a0.9_rB2e5_bondi_eks" #"043025_a0.9_rB2e3_bondi_eks" #"delta/051325_a0.9_rB2e5_bondi_eks" #
+    dirtag = "043025_a0.9_rB2e5_bondi_eks" #"delta/051325_a0.9_rB2e5_bondi_eks" #"043025_a0.9_rB2e3_bondi_eks" #
     tmax = 600 #700 #
     average_factor = 1.25
-    perzone_avg_frac = 0.5 # TODO
+    perzone_avg_frac = 0.5
+    quantity = "rho" #"Theta" #
 
     files = sorted(glob.glob("../data/" + dirtag + "/*out*.phdf"))[::-1]
 
@@ -418,11 +431,10 @@ def compare_jet_disk_rho_profile():
     # list initialization
     quantity_arr = [0] * n_zones
     num_sum = [0] * n_zones
-    rho_arr = [0] * n_zones
     first_time = np.inf
     last_time = np.inf
 
-    start_fnum=380 #450 #180 #
+    start_fnum=380 #(rB2e5) #180 #450 (rB2e3) #
     for f in files[start_fnum:]: #start_fnum+100]:
         dump = pyharm.load_dump(f, ghost_zones=False)
         iwv = dump["Params"]["Multizone/i_within_vcycle"]
@@ -436,7 +448,7 @@ def compare_jet_disk_rho_profile():
             switch_num = np.argwhere(switch_pt - dump["n_step"] < 0)[-1,0]
             if (switch_pt[switch_num + 1] - dump["n_step"] <= (switch_pt[switch_num + 1] - switch_pt[switch_num]) * perzone_avg_frac):
                 if dump["t"] < first_time: first_time = dump["t"]
-                quantity_arr[zone] += dump["rho"]
+                quantity_arr[zone] += dump[quantity]
                 num_sum[zone] += 1
     
     print(num_sum, last_time / tB, first_time / tB)
@@ -459,8 +471,8 @@ def compare_jet_disk_rho_profile():
     thdisk = np.argwhere((dump["th1d"] < np.pi * 7 / 12) & (dump["th1d"] > np.pi * 5 / 12))[:,0]
 
     inertial_range = np.argwhere((dump["r1d"] > 10) & (dump["r1d"] < rB / 10))[:,0]
-    colors = ['r', 'b', 'g']
-    regions = ['N', 'S', 'mid']
+    colors = ['r', 'b', 'k']
+    regions = ['N', 'S', 'M']
     for ithselect, thselect in enumerate([thnorth, thsouth, thdisk]):
         selectmean = mean[:,thselect].mean(axis=-1)
         ax.loglog(dump["r1d"], selectmean, color=colors[ithselect], label=regions[ithselect])
@@ -469,18 +481,20 @@ def compare_jet_disk_rho_profile():
         popt, pcov = curve_fit(lin_func, np.log10(dump["r1d"][inertial_range]), np.log10((mean[:, thselect].mean(axis=-1))[inertial_range]))
         print("{}: slope = {:.3g} +- {:.3g}".format(regions[ithselect], popt[0], np.sqrt(np.diag(pcov)[0])))
         ax.loglog(dump["r1d"][inertial_range], np.power(10, lin_func(np.log10(dump["r1d"][inertial_range]), *popt)), color=colors[ithselect], lw=10, alpha=0.1)
+        ax.text(1e2, 5e-6, r"$\propto r^{-1.1}$", color='k')
+        ax.text(5e1, 5e-8, r"$\propto r^{-1.3}$", color='m')
 
     # show rB
     ax.axvline(rB, color='gray', lw=1, alpha=1, ls='--')
 
     # plot settings
     ax.set_xlabel(r"Radius [$r_g$]")
-    ylabel = variableToLabel('rho')
+    ylabel = variableToLabel(quantity)
     ax.set_ylabel(ylabel)
     ax.set_xlim([rEH, rout])
     ax.legend()
 
-    output = "../plots/compare_jet_disk_rho_profile.png"
+    output = "../plots/compare_jet_disk_"+quantity+"_profile.png"
     plt.savefig(output,bbox_inches='tight')
     print("saved to " + output)
     plt.close()
@@ -488,7 +502,7 @@ def compare_jet_disk_rho_profile():
 if __name__ == "__main__":
     #compare_prescription_slice()
     #compare_evolution_rB()
-    #compare_quantity_rB()
-    #show_snapshot(3830) # 3598) #3493) #3220) #
-    compare_jet_disk_rho_profile()
+    compare_quantity_rB()
+    #show_snapshot(3830) #3997) # 3598) #3493) #3220) #
+    #compare_jet_disk_profile()
     #show_tavged(also_show_rprofile=True)

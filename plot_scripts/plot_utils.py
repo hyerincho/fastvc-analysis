@@ -231,12 +231,16 @@ def plot_shell_summed(ax, dump, x, var, color="k", lw=5, j_slice=slice(None), la
     ax.plot(x, -var, color=color, lw=lw, ls=":", alpha=alpha)
     return var
 
-def extractQuantity(D, quantity, average_factor=2.0, return_mean=True, use_Mdot_mean=True):
+def extractQuantity(D, quantity, average_factor=2.0, return_mean=True, use_Mdot_mean=True, verbose=False):
     # extract steady state of the quantity
     quantity_arr, _ = processTimeSeries(D, quantity, use_Mdot_mean=use_Mdot_mean, average_factor=average_factor)
     innermost = np.array(D["zones"]) == 0  # <= 1 #
     quantity_arr = quantity_arr[innermost]
     quantity_arr = quantity_arr[int(float(len(quantity_arr)) / average_factor) :]
+    if verbose: 
+        times = np.array(D["times"])[innermost]
+        times = times[int(float(len(times)) / average_factor) :]
+        print("t={:.5g}-{:.5g}".format(times[0], times[-1]))
     if return_mean: return np.mean(quantity_arr)
     else: return quantity_arr
 
@@ -299,3 +303,6 @@ def corr(t1, t2):
     p_f = np.conj(f1) * f2
     p_t = np.fft.ifft(np.fft.fftshift(p_f))
     return p_t
+
+if __name__ == "__main__":
+    print(eta_BZ6(0.9375, 50.18, 0.03))

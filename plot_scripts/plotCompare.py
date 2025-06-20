@@ -7,7 +7,7 @@ from plot_utils import *
 from ylabel_dictionary import *
 
 
-def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_dir=None, row=None, figsize=None, xlim=None, passed_fig_ax=None, tmax=None, rescale=False, time_bin_factor=2, show_rb=False, perzone_avg_frac=0.5, verbose=False, prioritize_inner=False):
+def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_dir=None, row=None, figsize=None, xlim=None, passed_fig_ax=None, tmax=None, rescale=False, time_bin_factor=2, show_rb=False, show_allowed_range=False, perzone_avg_frac=0.5, verbose=False, prioritize_inner=False):
     matplotlib_settings()
 
     if len(quantities) <= 3:
@@ -49,6 +49,10 @@ def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_
             # fig_ax = (fig, axes)
         else:
             fig_ax = plotProfiles(pkl_name, quantities, plot_dir=plot_dir, perzone_avg_frac=perzone_avg_frac, num_time_chunk=1, fig_ax=fig_ax, color_list=[colors[i]], label=labels[i], linestyle=linestyles[i], tmax=tmax[i], rescale=rescale, time_bin_factor=time_bin_factor, show_rb=show_rb, legend_all=False, verbose=verbose, prioritize_inner=prioritize_inner)
+
+    if show_allowed_range:
+        for iq, quantity in enumerate(quantities):
+            if quantity == "eta": fig_ax[1][iq].axhspan(0.1, 1, color='g', alpha=0.1)
 
     if xlim is not None:
         if len(np.shape(fig_ax[1])) > 1:
@@ -188,18 +192,18 @@ def compareSpin(a=0.5, time_bin_factor=2):
         oz_num = len(dirtagList)  #2 # just so that I don't have a time cap
         colorList = ["black", "k", "b", "b", "r", "c", "pink", "gray"]  # colors for each runs "tab:blue", "g", "m", 
         linestyleList = ['solid', "dashed", "solid", "dashed", "dashed", "dashed", "dashed"]
-        labelList = ["oz", "mz", "oz_tl", "mz_tl", "mz_tl-.9", "mz_tl_nocap", "mz_tl-.9_nocap", "mz_nocap"]  # "mz_jks_ca", "mz_tl_0","oz_jks", "mz_jks", "mz_tl_jks", 
+        labelList = ["oz", "mz", "oz_tl", "mz_tl", "mz_tl-", "mz_tl_long", "mz_tl-_long", "mz_nocap"]  # "mz_jks_ca", "mz_tl_0","oz_jks", "mz_jks", "mz_tl_jks", 
         plot_dir = "../plots/n4_spin_" + str(a)
 
     # quantityList = ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "Omega", "T"] #"Omega"["Mdot", "eta", "eta_Fl", "eta_EM"] #
-    quantityList = ["eta", "phib", "beta"] #, "Mdot"] # "Omega"]  # , "T"] #
+    quantityList = ["eta", "phib"] #, "Omega"]  #] #, "beta"] #, "Mdot"] #  , "T"] #
     if a == None:
         rEH = 2  # just use a=0 rEH
     else:
         rEH = calc_rEH(a)
     xlim = (rEH, 3e4)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[50, 50, 50, 50, 50, 300, 300], rescale=True, time_bin_factor=time_bin_factor, show_rb=True, figsize=(24,5.5), prioritize_inner=True)  # tmax 4e5
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[50, 50, 50, 50, 50, 450, 450], rescale=True, time_bin_factor=time_bin_factor, show_rb='grey', figsize=(8 * len(quantityList),5.5), prioritize_inner=True)  # tmax 4e5
 
 
 def compareSpinTimeAverages(quantity="phib", tmax=None, average_factor=2, show_RN22=False):
@@ -573,19 +577,20 @@ def compareCoords(time_bin_factor=2, tmax=None):
     matplotlib_settings()
     linestyleList = None
     dirtagList = [
+        "051225_oz_a0.9_toriilike_newflr",
         "051225_n4_a0.9_toriilike_newflr",
         "041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
         #"043025_a0.9_rB2e5_bondi_eks",
         #"042325_a0.9_rB2e5_bondi",
     ]
-    labelList = ["mz_tl", "mz_tl_jks"] #, "2", "5"]  #
+    labelList = ["oz_tl", "mz_tl", "mz_tl_jks"] #, "2", "5"]  #
     # dirtagList = [
     #    "041625_a0.9_rB2e3_jks2_smth3",
     #    "041725_a0.9_rB2e3_jks2_smth2",
     #        ]
     # labelList = ["eks", "jks1", "3", "2"]
 
-    colorList = ['b', 'g'] #plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList)))  # colors for each runs
+    colorList = ['k', 'b', 'g'] #plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList)))  # colors for each runs
     linestyleList = ["solid"] * (len(dirtagList))
     plot_dir = "../plots/n4_compare_coords"
 
@@ -604,8 +609,8 @@ def compareCoords(time_bin_factor=2, tmax=None):
         compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=tmax, rescale=False, time_bin_factor=time_bin_factor, passed_fig_ax=(fig, np.array([ax])), show_rb=True, prioritize_inner=True)
 
         # label EM
-        ax.text(1.8e2, 1e-1, r"$\eta_{\rm EM}$", color='b')
-        ax.text(3e3, 1e-1, r"$\eta_{\rm EM}$", color='g')
+        ax.text(1.8e2, 1e-1, r"$\overline{\eta}_{\rm EM}$", color='b')
+        ax.text(3e3, 1e-1, r"$\overline{\eta}_{\rm EM}$", color='g')
 
         # save plot
         os.makedirs(plot_dir, exist_ok=True)
@@ -668,11 +673,11 @@ def compareRB(a=0.9, time_bin_factor=2, tmax=None):
         rEH = calc_rEH(a)
     xlim = (rEH, 1e8)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=tmax, rescale=True, time_bin_factor=time_bin_factor, verbose=True, show_rb=True, perzone_avg_frac=0.5)  #0.05
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=tmax, rescale=True, time_bin_factor=time_bin_factor, verbose=True, show_rb=True, show_allowed_range=True, perzone_avg_frac=0.5)  #0.05
 
 
 def _main():
-    compareSpin(0.9, time_bin_factor=1.25) #1.5) #
+    #compareSpin(0.9, time_bin_factor=1.25) #1.5) #2) #1.25) #
     #compareCoords(time_bin_factor=1.25, tmax=50) #1.2)
     #compareRB(0.9, time_bin_factor=1.25, tmax=[400, 700, 700, 600, 600]) #1.25)  # 2.) #
 
@@ -680,7 +685,7 @@ def _main():
     # compareSpinTimeAverages('phib', show_RN22=True, tmax=tmax, average_factor=2)
     # compareSpinTimeAverages('eta', show_RN22=True, tmax=tmax, average_factor=1.5)
     #compareN8Spin(None, time_bin_factor=2) #0.5)
-    #compareN8OldVsNew(2) #1.25)
+    #compareN8OldVsNew(1.25) #2) #
     #comparePrescriptions(0.9)
     # compareMdotEta(time_bin_factor=2, rescale=True)
     # compareFvcVsOld()
