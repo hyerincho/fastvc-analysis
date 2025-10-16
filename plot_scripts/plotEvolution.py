@@ -109,6 +109,8 @@ def plotEvolution(pkl, ax_passed=None, quantity="eta", average_factor=2, xaxis_t
 
     if tmax is not None and scale_tB and show_avg and only_selectively_show:
         i_keep = np.argwhere((times < tmax) & (times > tmax / average_factor))
+        #if "052825_a0.9_rB2e5_bondi_eks_largerout" in pkl and quantity == "eta": 
+        #    np.save("./plotevolutiondat.npy", quantity_arr[i_keep])
         mean = np.nanmean(quantity_arr[i_keep])
         print("mean of " + quantity + " is {:.5g}".format(mean))
         ax.plot([tmax / average_factor, tmax], [mean, mean], color=color, alpha=0.5, lw=10)
@@ -332,24 +334,27 @@ if __name__ == "__main__":
     dirtag="032125_n4a0.9_toriilike"
     dirtag="041625_n4_a0.9_toriilike_jks2_smth2_reconnect"
     dirtag = "042325_a0.9_rB2e5_bondi"
-    #dirtag="043025_a0.9_rB2e3_bondi_eks"
-    #dirtag="050625_a0.9_rB2e5_oz_test"
+    dirtag="043025_a0.9_rB2e3_bondi_eks"
+    dirtag="050625_a0.9_rB2e5_oz_test"
     #dirtag="051225_a0.5_rB2e5_toriilike_beta1"
     #dirtag="051225_n4_a0.9_torrilike_nocap_newflr"
     #dirtag="051225_n4_a-0.9_toriilike_eks"
     #dirtag="051225_oz_a0.9_toriilike_newflr"
     #dirtag="051225_oz_a0.9_bondi_newflr"
-    #dirtag="051225_n4_a0.9_toriilike_newflr"
     #dirtag="051225_n4_a0.9_bondi_newflr"
     #dirtag="delta/051325_a0.9_rB2e5_bondi_eks"
     #dirtag="051325_a0.0_rB2e5_eks"
     #dirtag="052125_torus_noehbuffer_noismr_a0.5"
     #dirtag="052725_torus_noehbuffer_noismr_a0.5_diffflr"
-    #dirtag="052825_a0.9_rB2e5_bondi_eks_largerout"
+    dirtag="052825_a0.9_rB2e5_bondi_eks_largerout"
     #dirtag="052825_n4_a-0.9_torilike_nocap_newflr"
-    #dirtag="052925_a0.0_rB2e5_eks_largerout"
-    #dirtag="060525_n4_a0_bondi_nocap_newflr"
-    dirtag="060925_n4_a0.9_bondi_rot+"
+    #dirtag="080425_a0.9_rB2e5_fafout" #mixedinverter" #avgneighbor" #sigma10" #
+    #dirtag="080625_a0.9_rB2e3_mixedinverter"
+    #dirtag="080625_a0.9_rB2e6"
+    #dirtag="080625_a0.9_rB2e5_96"
+    #dirtag="082725_a0.9_rB2e3_fafout"
+    #dirtag="091525_a0.9_rB2e5_normal-recovery"
+    #dirtag="092525_a0.9_rB2e5_mom_cons_test" #_all" #
     pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
 
     average_factor = 1.25 #1.5  # 2 #

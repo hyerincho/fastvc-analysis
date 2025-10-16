@@ -1,11 +1,27 @@
+from astropy import units as u
+from astropy import constants as const
 from plot_utils import *
 from plotEvolution import plotEvolution
+from plotCompare import compareRuns
 
 def powerlaw_func(x, a, b):
     return a * np.power(x, b)
 
 def lin_func(x, a, b):
     return a * x + b
+
+k=const.k_B
+c=const.c
+m_p=const.m_p
+mu = 0.62*const.m_p # ????
+def rB2T(rB):
+    gam = 5./3.
+    return ((1. / (gam * np.array(rB))) * mu * c**2 / k).to('K').value
+
+def T2rB(T):
+    gam = 5./3.
+    theta = (k * np.array(T) * u.K / (mu * c**2)).to('')
+    return 1. / (gam * theta)
 
 def compare_prescription_slice():
     from matplotlib import patches
@@ -48,7 +64,7 @@ def compare_prescription_slice():
         print("saved to " + output)
 
 
-def compare_evolution_rB():
+def compare_evolution_rB(a=0.9):
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
     quantities = ["Mdot", "eta", "phib"] #, "Omega"]
@@ -56,21 +72,50 @@ def compare_evolution_rB():
     fig, ax = plt.subplots(len(quantities), 1, figsize=figsize, sharex=True)
     if len(quantities) == 1: ax = [ax]
     plt.subplots_adjust(wspace=0., hspace=0)
-
-    dirtags = [
-        #"060525_n4_a0_bondi_nocap_newflr",
-        "051225_n4_a0.9_bondi_nocap_newflr",
-        "043025_a0.9_rB2e3_bondi_eks",
-        "delta/051325_a0.9_rB2e5_bondi_eks",
-        "043025_a0.9_rB2e5_bondi_eks",
-        #"052825_a0.9_rB2e5_bondi_eks_largerout",
-        #"051325_a0.0_rB2e5_eks",
-        #"042325_a0.9_rB2e5_bondi",
-        ]
+    
+    if a == 0.1:
+        dirtags = [
+            "072125_a0.1_rB2e4",
+            "072125_a0.1_rB2e5",
+            ]
+        tmaxs = [700, 700] 
+        labels = ["2e4", "2e5"]
+    elif a == 0.3:
+        dirtags = [
+            "072125_a0.3_rB2e4",
+            "072125_a0.3_rB2e5",
+            ]
+        tmaxs = [700, 700] 
+        labels = ["2e4", "2e5"]
+    elif a == 0.5:
+        dirtags = [
+            "062025_a0.5_rB2e3",
+            "062025_a0.5_rB2e4",
+            "062025_a0.5_rB2e5",
+            ]
+        tmaxs = [700, 700, 1000] 
+        labels = ["2e3", "2e4", "2e5"]
+    elif a == 0.7:
+        dirtags = [
+            "072125_a0.7_rB2e4",
+            "072125_a0.7_rB2e5",
+            ]
+        tmaxs = [700, 700] 
+        labels = ["2e4", "2e5"]
+    elif a == 0.9:
+        dirtags = [
+            "051225_n4_a0.9_bondi_nocap_newflr",
+            "043025_a0.9_rB2e3_bondi_eks",
+            #"092525_a0.9_rB2e3_mom_cons",
+            "delta/051325_a0.9_rB2e5_bondi_eks",
+            #"delta/092525_a0.9_rB2e4_mom_cons",
+            "052825_a0.9_rB2e5_bondi_eks_largerout",
+            #"092525_a0.9_rB2e5_mom_cons_test",
+            ]
+        tmaxs = [400, 700, 700, 700] 
+        labels = ["4e2", "2e3", "2e4", "2e5", "2e5jks", "2e5new", "2e5_a0"]
 
     colors = plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtags)))
-    tmaxs = [400, 700, 700, 600, 150] 
-    labels = ["4e2", "2e3", "2e4", "2e5", "2e5jks", "2e5new", "2e5_a0"]
     for i, dirtag in enumerate(dirtags):
         pkl = "../data_products/" + dirtag + "_profiles_all.pkl"
         with open(pkl, "rb") as openFile:
@@ -84,7 +129,7 @@ def compare_evolution_rB():
             plotEvolution(pkl, ax_passed=ax[j], quantity=quantity, average_factor=1.25, xaxis_t=True, scale_tB=True, color=colors[i], rescaleMdot=True, tmax=tmaxs[i], show_avg=True, show_negative=False, label=labels[i], perzone_avg_frac=0.5, only_selectively_show=True, take_mean=True, radius=None) #, use_Mdot_mean=True)
 
     #ax[0].set_yscale('linear')
-    ax[1].legend(ncol=len(dirtags), bbox_to_anchor=(0.5, 0.15), numpoints=1)#, fontsize=20)
+    ax[1].legend(ncol=len(dirtags), bbox_to_anchor=(0.5, 0.2), numpoints=1)#, fontsize=20)
     ax[0].set_ylim([1e-4,1]) #([0, 0.15])
     ax[0].set_xlim([0, np.max(tmaxs)]) #([0, 0.15])
     ax[0].set_ylabel(r"$\dot{M}$ [$\dot{M}_B$]")
@@ -115,8 +160,10 @@ def compare_quantity_rB():
         "051225_n4_a0.9_bondi_nocap_newflr",
         "043025_a0.9_rB2e3_bondi_eks",
         "delta/051325_a0.9_rB2e5_bondi_eks",
-        "043025_a0.9_rB2e5_bondi_eks",
+        #"043025_a0.9_rB2e5_bondi_eks",
+        "052825_a0.9_rB2e5_bondi_eks_largerout",
         "052925_a0.0_rB2e5_eks_largerout",
+        #"051325_a0.0_rB2e5_eks",
         ]
     
     time_bin_factor = 1.25
@@ -124,24 +171,26 @@ def compare_quantity_rB():
     colors = list(plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtags)-2))) # + ['k']
     colors = [colors[0]] + colors
     colors = colors + [colors[-1]]
-    tmaxs = [400, 400, 700, 700, 600, 700] #400]
+    tmaxs = [400, 400, 700, 700, 700, 700] #400]
     for i, dirtag in enumerate(dirtags):
         pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
         print(pkl_name)
         with open(pkl_name, "rb") as openFile:
             D = pickle.load(openFile)
         tDivList, binNumList = setTimeBins(D, 1, time_bin_factor=time_bin_factor, tmax=tmaxs[i])
-        mask_list = get_mask(D)
+        mask_list = get_mask(D, prioritize_inner=False) #True)
         r_sonic = D["dump"]["rs"]
         mdot = D["dump"]["mdot"]
         rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
         rEH = D["dump"]["r_eh"]
         for j, quantity in enumerate(quantities):
             radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac, mask_list=mask_list, rescale=True)
-            if quantity == "Mdot" or quantity == "phib":
+            if quantity == "Mdot":
+                r_read = rEH
+            elif quantity == "phib":
                 r_read = rEH
             elif quantity == "eta":
-                r_read = rB
+                r_read = rB / 3.
             else:
                 print("WARNING not supported")
             i_r = np.argmin(abs(radii[0] - r_read))
@@ -166,10 +215,15 @@ def compare_quantity_rB():
     ax[0].axhline(1, color='k', ls=":")
     ax[1].text(70, 0.3, r'$a_*=0.9$', color='grey', fontsize=15)
     ax[1].text(70, 0.03, r'$a_*=0.0$', color='grey', fontsize=15)
-    ax[1].axhspan(0.1, 1, color='g', alpha=0.1)
+    ax[1].axhspan(0.1, 1., color='g', alpha=0.1)
+    #cmap_nums = [0.4] * 5  + [0.5] * 10 + [0.4]
+    #ax[1].imshow([[z] * len(cmap_nums) for z in cmap_nums],  cmap = 'Greens', extent=[60, 2e6, 0.14, 1.2], interpolation = 'bicubic', aspect='auto', alpha=0.4)
     #ax[2].set_ylim([10, 100])
     ax[0].set_ylabel(r"$\overline{\dot{M}}(r_H)$ [$\dot{M}_B$]")
-    ax[1].set_ylabel(r'$\overline{\eta}(R_B)$')
+    ax[1].set_ylabel(r'$\overline{\eta}(R_B/3)$')
+    # 2nd axis
+    secax = ax[0].secondary_xaxis('top', functions=(rB2T, T2rB))
+    secax.set_xlabel(r'$T_{\infty}$ [K]') #,fontsize=fontsize, labelpad=7)
 
     # save
     output = "../plots/compare_quantity_rB.png"
@@ -192,7 +246,8 @@ def show_snapshot(fnum):
     plt.subplots_adjust(hspace=0.01)
     
     #gs = GridSpecFromSubplotSpec(2, 4, subplot_spec = spec_snp, hspace=0.02, wspace=0.02)
-    gs = GridSpecFromSubplotSpec(2, 6, subplot_spec = spec_snp, hspace=0.02, wspace=0.02)
+    n_zones = 6 #dump["Params"]["Multizone/nzones_eff"]
+    gs = GridSpecFromSubplotSpec(2, n_zones, subplot_spec = spec_snp, hspace=0.02, wspace=0.02)
     ax = []
     for cell in gs: ax += [plt.subplot(cell)]
     ax = np.array(ax).reshape(2,-1)
@@ -202,7 +257,7 @@ def show_snapshot(fnum):
     inwards = -1 # 1
 
     # read file
-    dirtag = "043025_a0.9_rB2e5_bondi_eks"
+    dirtag = "052825_a0.9_rB2e5_bondi_eks_largerout" #"043025_a0.9_rB2e5_bondi_eks"
     fn = glob.glob("../data/" + dirtag + "/*{:05d}*.phdf".format(fnum))[0]
     dump = pyharm.load_dump(fn,ghost_zones=False)
     print(dump["n_step"])
@@ -213,7 +268,6 @@ def show_snapshot(fnum):
     nzeff = dump["Params"]["Multizone/nzones_eff"]
     i_zone = abs(iwv - (nzeff - 1))
     print("fnum {} t={:.5g} tg / {:.5g} tB izone{}".format(fnum, dump["t"], dump["t"] / np.power(rB, 3./2), i_zone))
-    n_zones = 6 #dump["Params"]["Multizone/nzones_eff"]
     patch_sz = np.zeros(n_zones)
 
     axes = ax #np.concatenate((ax[0],ax[1,::-1]))
@@ -223,8 +277,9 @@ def show_snapshot(fnum):
             window = (-sz, sz, -sz, sz)
             #im1 = pyharm.plots.plot_xz(ax1d, dump, "log_beta", window=window, cmap='plasma', vmin=1e-1, vmax=1e3, **plotrc)
             #im1 = pyharm.plots.plot_xz(ax1d, dump, "log_K", window=window, cmap='jet', vmin=1e-1, vmax=1e6, **plotrc)
-            #im1 = pyharm.plots.plot_xz(ax1d, dump, "symlog_FE_norho_A", window=window, vmin=-1e-3, vmax=1e-3, **plotrc)
-            im1 = pyharm.plots.plot_xz(axes[0,i], dump, "log_Theta", window=window, vmin=8e-6, vmax=1, cmap='gist_heat', **plotrc)
+            #im1 = pyharm.plots.plot_xz(axes[0,i], dump, "symlog_FE_norho_A", window=window, vmin=-1e-3, vmax=1e-3, **plotrc)
+            #im1 = pyharm.plots.plot_xz(axes[0,i], dump, "log_Gamma", window=window, vmin=1, vmax=5, cmap='gist_heat', **plotrc)
+            #im1 = pyharm.plots.plot_xz(axes[0,i], dump, "log_Theta", window=window, vmin=8e-6, vmax=1, cmap='gist_heat', **plotrc)
             im2 = pyharm.plots.plot_xz(axes[1,i], dump, dump["rho"], window=window, vmin=1e-10, vmax=1e-4, log=True, cmap='turbo', **plotrc)# turbo nipy_spectral half_cut=True, 
             scale = np.power(10,np.floor(np.log10(sz)))
             c= 'white'
@@ -272,8 +327,10 @@ def show_snapshot(fnum):
             
         # panel numbers
         axes[0,i].text(0.70, 0.93, 'zone-'+str([0,7][inwards>0]-i*(inwards)),transform=axes[0,i].transAxes, fontsize=25, color='w')#, bbox=dict(facecolor='w', edgecolor='k', pad=5.0))
-        
-    plt.savefig("../plots/snapshot.png",bbox_inches='tight')
+    
+    output = "../plots/snapshot.png"
+    plt.savefig(output,bbox_inches='tight')
+    print("saved to " + output)
     plt.close()
 
 def show_tavged(also_show_rprofile=False):
@@ -399,8 +456,8 @@ def compare_jet_disk_profile():
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
     
-    dirtag = "043025_a0.9_rB2e5_bondi_eks" #"delta/051325_a0.9_rB2e5_bondi_eks" #"043025_a0.9_rB2e3_bondi_eks" #
-    tmax = 600 #700 #
+    dirtag = "052825_a0.9_rB2e5_bondi_eks_largerout" #"043025_a0.9_rB2e5_bondi_eks" #"delta/051325_a0.9_rB2e5_bondi_eks" #"043025_a0.9_rB2e3_bondi_eks" #
+    tmax = 700 #600 #
     average_factor = 1.25
     perzone_avg_frac = 0.5
     quantity = "rho" #"Theta" #
@@ -434,7 +491,7 @@ def compare_jet_disk_profile():
     first_time = np.inf
     last_time = np.inf
 
-    start_fnum=380 #(rB2e5) #180 #450 (rB2e3) #
+    start_fnum=100 #380 #(rB2e5) #180 #450 (rB2e3) #
     for f in files[start_fnum:]: #start_fnum+100]:
         dump = pyharm.load_dump(f, ghost_zones=False)
         iwv = dump["Params"]["Multizone/i_within_vcycle"]
@@ -481,8 +538,8 @@ def compare_jet_disk_profile():
         popt, pcov = curve_fit(lin_func, np.log10(dump["r1d"][inertial_range]), np.log10((mean[:, thselect].mean(axis=-1))[inertial_range]))
         print("{}: slope = {:.3g} +- {:.3g}".format(regions[ithselect], popt[0], np.sqrt(np.diag(pcov)[0])))
         ax.loglog(dump["r1d"][inertial_range], np.power(10, lin_func(np.log10(dump["r1d"][inertial_range]), *popt)), color=colors[ithselect], lw=10, alpha=0.1)
-        ax.text(1e2, 5e-6, r"$\propto r^{-1.1}$", color='k')
-        ax.text(5e1, 5e-8, r"$\propto r^{-1.3}$", color='m')
+        ax.text(1e2, 7e-6, r"$\propto r^{-1.1}$", color='k')
+        ax.text(5e1, 4e-8, r"$\propto r^{-1.3}$", color='m')
 
     # show rB
     ax.axvline(rB, color='gray', lw=1, alpha=1, ls='--')
@@ -499,10 +556,58 @@ def compare_jet_disk_profile():
     print("saved to " + output)
     plt.close()
 
+def snapshot_Gamma(fnum):
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    
+    fig, ax = plt.subplots(1,1,figsize=(8,6))
+    
+    plotrc={}
+    sz = 1e5
+    window = None #(-sz, sz, -sz, sz)
+    plotrc.update({'xlabel': False, 'ylabel': False,'xticks': [], 'yticks': [],'cbar': False, 'frame': False, 'no_title': True, 'shading': 'flat', 'window':window, 'log_r': True})
+
+    # read file
+    dirtag = "051225_oz_a0.9_toriilike_newflr" #"052825_a0.9_rB2e5_bondi_eks_largerout" #"043025_a0.9_rB2e5_bondi_eks"
+    fn = glob.glob("../data/" + dirtag + "/*{:05d}*.phdf".format(fnum))[0]
+    dump = pyharm.load_dump(fn,ghost_zones=False)
+
+    #ax.loglog(dump["r1d"], dump["Gamma"][:,0,32])
+    
+    pyharm.plots.plot_xz(ax, dump, "log_Gamma", vmin=1, vmax=4, cmap='gist_heat', **plotrc)
+    
+    # save
+    output = "../plots/snapshot_Gamma.png"
+    plt.savefig(output,bbox_inches='tight')
+    print("saved to " + output)
+    plt.close()
+
+def compare_resolution():
+    dirtagList = [
+            "052825_a0.9_rB2e5_bondi_eks_largerout",
+            "080625_a0.9_rB2e5_96"
+    ]
+    quantityList = ["Mdot", "rho", "beta", "eta"]  # , "eta_Fl", "eta_EM"]
+    colorList = ["tab:red", "tab:blue", "tab:orange", "tab:green", "black"]  # colors for each runs
+    labelList = ["fiducial", "high_res"]
+    plot_dir = "../plots/resolution_comparison"
+    
+    a = 0.9
+    if a == None:
+        rEH = 2  # just use a=0 rEH
+    else:
+        rEH = calc_rEH(a)
+    xlim = (rEH, 1e8)
+
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, use_avged_Mdot=True, time_bin_factor=1.25, tmax=700)
+
+
 if __name__ == "__main__":
     #compare_prescription_slice()
-    #compare_evolution_rB()
-    compare_quantity_rB()
-    #show_snapshot(3830) #3997) # 3598) #3493) #3220) #
+    compare_evolution_rB() #0.7)
+    #compare_quantity_rB()
+    #show_snapshot(4783) #5224) #3494) #4000) # old runs 3830) #3997) # 3598) #3493) #3220) #
+    #snapshot_Gamma(2097) #4763)
     #compare_jet_disk_profile()
     #show_tavged(also_show_rprofile=True)
+    #compare_resolution()

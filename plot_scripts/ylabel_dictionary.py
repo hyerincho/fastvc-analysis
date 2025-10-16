@@ -18,8 +18,9 @@ ylabel_dictionary["beta"] = r"$\langle\beta^{-1}\rangle ^{-1}$"
 ylabel_dictionary["sigma"] = r"$\sigma$"
 ylabel_dictionary["abs_Omega"] = r"$\langle|\Omega|\rangle /\Omega_K$"
 ylabel_dictionary["Omega"] = r"$\langle\Omega\rangle /\Omega_K$"
+ylabel_dictionary["Omega5"] = r"$\langle\Omega\rangle /\Omega_K \, (5\,r_g)$"
 ylabel_dictionary["Pg"] = r"$p_{\rm g}$"
-ylabel_dictionary["T"] = r"$\langle T \rangle$"
+ylabel_dictionary["T"] = r"$\overline{\langle T \rangle}$"
 ylabel_dictionary["phib"] = r"$\overline{\phi_b}$"
 
 

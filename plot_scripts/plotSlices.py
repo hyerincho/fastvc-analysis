@@ -129,7 +129,7 @@ def FE_slice(dirtag, num_files=-1, native=True, sum_each_ann=False):
     plt.close()
     print("saved to " + output)
 
-def tavgedSlice(dirtag, quantity, num_files=-1, native=True, sum_each_ann=False, rscale=None):
+def tavgedSlice(dirtag, quantity, num_files=-1, native=True, sum_each_ann=False, rscale=None, only_sum=0):
     matplotlib_settings()
     if native:
         fig, ax = plt.subplots(2, 1, figsize=(8, 6), sharex=native, sharey="row", gridspec_kw={"height_ratios": [1, 2]})
@@ -178,7 +178,9 @@ def tavgedSlice(dirtag, quantity, num_files=-1, native=True, sum_each_ann=False,
             dump = pyharm.load_dump(files[i], ghost_zones=False)
             if density_weight: weight = dump["rho"]
             else: weight = dump["1"]
-            quantity_tavg += dump[quantity] * weight
+            temp = dump[quantity] * weight
+            if only_sum > 0: temp[temp<0] = 0.
+            quantity_tavg += temp
             weight_tavg += weight
             num_sum += 1
             if dump["t"] > last_time:
@@ -211,6 +213,8 @@ def tavgedSlice(dirtag, quantity, num_files=-1, native=True, sum_each_ann=False,
         vmin = 1e-5; vmax = 1e-1
     elif quantity == "FE_EM_A":
         vmin = 1e-5; vmax = 1e-3
+    elif quantity == "FM_A":
+        vmin = 1e-5; vmax = 1e-1
     if np.any(quantity_tavg < 0.0):
         symlog = True
         #vmax = np.log10(vmax)
@@ -320,14 +324,18 @@ if __name__ == "__main__":
     #dirtag="040325_torus_noehbuffer"
     #dirtag="041625_n4_a0.9_toriilike_jks2_smth2_reconnect"
     #dirtag = "042325_a0.9_rB2e5_bondi"
-    dirtag="043025_a0.9_rB2e5_bondi_eks"
-    #dirtag="031425_a0.5_torus_rn22_noreconnect"
+    #dirtag="043025_a0.9_rB2e5_bondi_eks"
+    dirtag="031425_a0.5_torus_rn22_noreconnect"
     #dirtag="031325_a0.9_torus_rn22_noreconnect"
     #dirtag="050825_torus_noehbuffer_noismr"
     #dirtag="052125_torus_noehbuffer_noismr_a0.5"
     #dirtag="052525_torus_noehbuffer_noismr_a0.5_nofofc"
     dirtag="052725_torus_noehbuffer_noismr_a0.5_diffflr"
+    dirtag="052825_a0.9_rB2e5_bondi_eks_largerout"
+    #dirtag="053025_torus_noehbuffer_noismr_a0.5_lowx1res"
+    dirtag="080625_a0.9_rB2e5_96"
+    #dirtag="092525_a0.9_rB2e5_mom_cons_test"
 
     #FE_slice(dirtag, num_files=-1, native=False, sum_each_ann=True)
-    #tavgedSlice(dirtag, 'symlog_FE_EM_A', num_files=-1, native=False) #, rscale=1)
-    plotOmegaFieldvsTh(dirtag, num_files=100)
+    tavgedSlice(dirtag, 'log_K', num_files=-1, native=False) #, only_sum=1) #, rscale=1)
+    #plotOmegaFieldvsTh(dirtag, num_files=100)

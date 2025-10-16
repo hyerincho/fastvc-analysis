@@ -106,7 +106,7 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
                 print("ERROR: can't identify when this output is switched!")
             else:
                 switch_num = switch_num[0, 0]
-            #if zone_num == 6: pdb.set_trace()
+            #if zone_num == 0: pdb.set_trace()
             if switch_pt[switch_num + 1] - switch_list[i] <= (switch_pt[switch_num + 1] - switch_pt[switch_num]) * perzone_avg_frac:
                 # only when it is last (perzone_avg_frac), stage for averaging
                 sortedProfiles[zone_num][bin_num].append(profile)
@@ -114,6 +114,10 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
                 delt = times[i] - times[i-1]
                 if zone_num == 0 and delt > 100: delt = 100 # temporary TODO
                 deltBin[zone_num][bin_num].append(delt)
+
+    #if quantity == "eta":
+    #    i5 = np.argmin(abs(dictionary["radii"] - 5))
+    #    np.save("./plotprofiledat.npy",np.array(sortedProfiles[0][num_time_chunk-1])[:,i5])
 
     for b in range(num_time_chunk):
         for zone in range(n_zones_eff):
@@ -128,7 +132,7 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
     return avgedProfiles, invert
 
 
-def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0.5, mask_list=None, rescale=False, flatten_rho=False):
+def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0.5, mask_list=None, rescale=False, flatten_rho=False, use_avged_Mdot=False, flip_sign=False):
     """
     Put together the final time averages. If needed, do extra operations.
     """
@@ -144,7 +148,7 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
         avgedProfiles_Mdot, _ = timeAvgPerBin(dictionary, tDivList, binNumList, "Mdot", perzone_avg_frac=perzone_avg_frac)
         i10 = np.argmin(abs(radii - 10))
 
-    if quantity == "eta":
+    if use_avged_Mdot and quantity == "eta": #
         avgedProfiles_Edot, invert = timeAvgPerBin(dictionary, tDivList, binNumList, "Edot", perzone_avg_frac=perzone_avg_frac)
         for b in range(num_time_chunk):
             if len(avgedProfiles_Mdot[0][b]) > 0:
@@ -224,9 +228,9 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
                 profile_rho = avgedProfiles_rho[zone][b]
             if len(profile) > 0:
                 r_combined = np.concatenate([r_combined, radii[mask]])
-                values_combined = np.concatenate([values_combined, profile[mask]])  # * (-1) ** int(flip_sign)])
+                values_combined = np.concatenate([values_combined, profile[mask] * (-1) ** int(flip_sign)])
                 if save_rho:
-                    values_combined_rho = np.concatenate([values_combined_rho, profile_rho[mask]])  # * (-1) ** int(flip_sign)])
+                    values_combined_rho = np.concatenate([values_combined_rho, profile_rho[mask]]) #* (-1) ** int(flip_sign)
         if flatten_rho and quantity == "rho":
             values_combined *= np.power(r_combined, 1.1)  # just to test Xu+23 rho ~ r^{-0.8}
         rList[b] = r_combined
@@ -283,7 +287,7 @@ def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2, tmax=None):
             t_last = tmax * tB
         else:
             print("The run hasn't reached {}tB, or {}tg. Instead using {:.3g}tg".format(tmax, tmax * tB, t_last))
-
+    
     tDivList = np.array([t_first + (t_last - t_first) / np.power(time_bin_factor, i + 1) for i in range(num_time_chunk)])
     tDivList = tDivList[::-1]  # in increasing time order
     tDivList = np.append(tDivList, t_last)
@@ -363,6 +367,7 @@ def plotProfiles(
     legend_all=True,
     verbose=False,
     prioritize_inner=False,
+    use_avged_Mdot=False,
 ):
     # Changes some defaults.
     matplotlib_settings()
@@ -395,15 +400,18 @@ def plotProfiles(
         else:
             ax = ax1d[i]  # here we assume that the number of axes passed = number of quantities
 
-        radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac, mask_list=mask_list, rescale=rescale, flatten_rho=flatten_rho)
+        pzaf = perzone_avg_frac
+        if D["dump"]["driver/type"] == "kharma": pzaf=1 # if onezone, don't cutoff
+
+        radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=pzaf, mask_list=mask_list, rescale=rescale, flatten_rho=flatten_rho, use_avged_Mdot=use_avged_Mdot, flip_sign=flip_sign)
         if i == 0:
             for b in range(len(tDivList) - 1):
-                print("{}: t={:.3g}-{:.3g}".format(b, tDivList[b], tDivList[b + 1]))
+                print("{}: t={:.5g}-{:.5g}".format(b, tDivList[b], tDivList[b + 1]))
     
         print_radius = None
         if verbose:
             if quantity == "Mdot" or quantity == "phib": print_radius = rEH
-            elif quantity == "eta": print_radius = rB
+            elif quantity == "eta": print_radius = rB / 3.
         plotProfileQuantity(ax, radii, profiles, tDivList, colors=color_list, label=label, linestyle=linestyle, legend=(legend_all or (i == 0)), print_radius=print_radius)
 
         if show_init and ((quantity == "rho" and not flatten_rho) or quantity == "T" or quantity == "beta" or quantity == "u^r"):
@@ -434,7 +442,7 @@ def plotProfiles(
             ax.set_xscale("log")
             ax.set_yscale("log")
             if "eta" in quantity and quantity != "beta" and quantity != "etaMdot":
-                ax.set_ylim([1e-3, 4])
+                ax.set_ylim([4e-3, 4])
             elif quantity == "beta":
                 ax.set_ylim([1e-3, 10])
             elif quantity == "phib":
@@ -456,41 +464,22 @@ def plotProfiles(
 
 
 if __name__ == "__main__":
-    pkl_name = "../data_products/030425_a0.5_safe_longtin20_profiles_all.pkl"
-    pkl_name = "../data_products/delta/030525_a0.9_oz_profiles_all.pkl"
-    pkl_name = "../data_products/030325_a0.0_safe_tchar_profiles_all.pkl"
-    pkl_name = "../data_products/030725_a0.9_safe_longtin20_profiles_all.pkl"
-    #pkl_name = "../data_products/030925_a0.0_n8_lt10_dirichlet_profiles_all.pkl"
-    # pkl_name = "../data_products/031125_a0.5_dirichlet_profiles_all.pkl"a
-    #pkl_name = "../data_products/delta/032025_a0.5_oz_clearangle_profiles_all.pkl"
-    # pkl_name = "../data_products/032325_n4a0.9_toriilike_beta1_profiles_all.pkl"
-    # pkl_name = "../data_products/040225_a0.0_fofc_profiles_all.pkl"
-    # pkl_name = "../data_products/040325_n4_a0.9_torrilike_nocap_profiles_all.pkl"
-    #pkl_name = "../data_products/040825_n4_a0.9_torrilike_nocap_nc8000_profiles_all.pkl"
-    # pkl_name = "../data_products/041625_n4_a0.9_toriilike_jks_reconnect_profiles_all.pkl"
     pkl_name = "../data_products/041625_n4_a0.9_toriilike_jks2_smth2_reconnect_profiles_all.pkl"
-    # pkl_name = "../data_products/041625_a0.9_rB2e3_jks2_smth3_profiles_all.pkl"
-    # pkl_name = "../data_products/041725_a0.9_rB2e3_jks2_smth2_profiles_all.pkl"
-    # pkl_name = "../data_products/041725_a0.9_rB2e5_jks2_smth2.5_profiles_all.pkl"
-    pkl_name = "../data_products/041825_a0.9_rB2e5_jks2_smth2_profiles_all.pkl"
-    # pkl_name = "../data_products/042125_a0.0_rB2e5_jks2_profiles_all.pkl"
-    # pkl_name = "../data_products/042125_a0.5_rB2e5_jks2_profiles_all.pkl"
-    # pkl_name = "../data_products/042125_n4_a0.9_bondi_jks2_profiles_all.pkl"
-    # pkl_name = "../data_products/042125_n4_a0.5_jks2_profiles_all.pkl"
-    # pkl_name = "../data_products/042125_a0.9_oz_jks_profiles_all.pkl"
-    # pkl_name = "../data_products/042225_n4_a0.9_retrograde_profiles_all.pkl"
-    #pkl_name = "../data_products/042225_n4_a0.9_toriilike_jks2_nocap_profiles_all.pkl"
     pkl_name = "../data_products/042225_n4_a0.9_bondi_jks2_nocap_profiles_all.pkl"
     pkl_name = "../data_products/042325_a0.9_rB2e5_bondi_profiles_all.pkl"
     pkl_name = "../data_products/043025_a0.9_rB2e3_bondi_eks_profiles_all.pkl"
-    pkl_name = "../data_products/051225_n4_a0.9_bondi_nocap_newflr_profiles_all.pkl"
-    #pkl_name = "../data_products/051225_n4_a0.9_torrilike_nocap_newflr_profiles_all.pkl"
-    #pkl_name = "../data_products/051225_n4_a0.9_toriilike_newflr_profiles_all.pkl"
-    pkl_name = "../data_products/051225_n4_a-0.9_toriilike_eks_profiles_all.pkl"
-    pkl_name = "../data_products/051325_a0.0_rB2e5_eks_profiles_all.pkl"
+    pkl_name = "../data_products/051225_oz_a0.9_toriilike_newflr_profiles_all.pkl"
     #pkl_name = "../data_products/delta/051325_a0.9_rB2e5_bondi_eks_profiles_all.pkl"
-    pkl_name = "../data_products/052925_a0.0_rB2e5_eks_largerout_profiles_all.pkl"
-    #pkl_name = "../data_products/060525_n4_a0_bondi_nocap_newflr_profiles_all.pkl"
+    pkl_name = "../data_products/052825_a0.9_rB2e5_bondi_eks_largerout_profiles_all.pkl"
+    #pkl_name = "../data_products/052925_a0.0_rB2e5_eks_largerout_profiles_all.pkl"
+    #pkl_name = "../data_products/080425_a0.9_rB2e5_mixedinverter_profiles_all.pkl"
+    #pkl_name = "../data_products/080425_a0.9_rB2e5_fafout_profiles_all.pkl"
+    #pkl_name = "../data_products/080625_a0.9_rB2e6_profiles_all.pkl"
+    #pkl_name = "../data_products/080625_a0.9_rB2e5_96_profiles_all.pkl"
+    #pkl_name = "../data_products/091525_a0.9_rB2e5_normal-recovery_profiles_all.pkl"
+    #pkl_name = "../data_products/092525_a0.9_rB2e4_fafout_profiles_all.pkl"
+    pkl_name = "../data_products/092525_a0.9_rB2e5_mom_cons_test_profiles_all.pkl"
+    #pkl_name = "../data_products/092525_a0.9_rB2e6_momcons_profiles_all.pkl"
 
     plot_dir = "../plots/test"  # common directory
     os.makedirs(plot_dir, exist_ok=True)
@@ -498,18 +487,18 @@ if __name__ == "__main__":
     # os.makedirs(plot_dir, exist_ok=True)
 
     quantityList = [
-        "rho",
-        "Mdot",
-        "beta",
+        #"rho",
+        #"Mdot",
+        #"beta",
         "eta",
-        "T",
-        "eta_Fl",
-        "eta_EM",
-        "u^r",
-        "abs_u^r",
-        "Omega",
-        "abs_Omega",
-        "phib",
+        #"T",
+        #"eta_Fl",
+        #"eta_EM",
+        #"u^r",
+        #"abs_u^r",
+        #"Omega",
+        #"abs_Omega",
+        #"phib",
     ]
     print(pkl_name)
-    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=.5, num_time_chunk=4, time_bin_factor=1.25, rescale=True, show_init=True, show_rscale=False, flatten_rho=False, tmax=400) #600)
+    plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=.5, num_time_chunk=4, time_bin_factor=1.25, rescale=True, show_init=True, show_rscale=False, flatten_rho=False, prioritize_inner=False, tmax=700) #

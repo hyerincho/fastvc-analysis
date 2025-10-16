@@ -3,11 +3,24 @@ import pdb
 import pickle
 import matplotlib.pyplot as plt
 import glob
+from astropy import units as u
+from astropy import constants as const
 import pyharm
 
 from matplotlib_settings import *
 import bondi_analytic as bondi
 from ylabel_dictionary import *
+
+c = const.c
+G = const.G
+
+def rg2pc(r,M=6.5e9*u.Msun):
+    rg = G*M/c**2
+    return (r*rg).to('pc').value
+
+def pc2rg(R,M=6.5e9*u.Msun):
+    rg = G*M/c**2
+    return (R*u.pc/rg).to('')
 
 def calc_rEH(a):
     return 1.0 + np.sqrt(1.0 - a**2)
@@ -25,15 +38,15 @@ def get_spin(D, verbose=False):
     return a
 
 
-def eta_BZ6(a, phib, kappa=0.03):
+def eta_BZ6(a, phib, kappa=0.05):
     # kappa = 0.053 # split-monopole
     # kappa = 0.044 # parabolic
     # kappa = 0.03
     rEH = calc_rEH(a)
     Omega = a / (2 * rEH)
-    return 0.01 * kappa * (4.0 * np.pi) * np.power(phib * Omega, 2.0) * (1.0 + 1.38 * Omega**2 - 9.2 * Omega**4)  # from percentage to decimals
+    return kappa / (4.0 * np.pi) * np.power(phib * Omega, 2.0) * (1.0 + 1.38 * Omega**2 - 9.2 * Omega**4)  # from percentage to decimals
 
-def thphi_average(dump,quantity,sum_instead=False,mass_weight=True, hemisphere=None):
+def thphi_average(dump,quantity,sum_instead=False,mass_weight=True, hemisphere=None, pole_pad=0):
   if isinstance(quantity,str):
     to_average=np.copy(dump[quantity])
   else:
@@ -43,11 +56,11 @@ def thphi_average(dump,quantity,sum_instead=False,mass_weight=True, hemisphere=N
     to_average *= dump['rho']
 
   if hemisphere is None:
-      j_slice = slice(None)
+      j_slice = slice(pole_pad, dump["n2"] - pole_pad)
   elif hemisphere == "n":
-      j_slice = slice(0, dump["n2"] // 2)
+      j_slice = slice(pole_pad, dump["n2"] // 2)
   elif hemisphere == "s":
-      j_slice = slice(dump["n2"] // 2, dump["n2"])
+      j_slice = slice(dump["n2"] // 2, dump["n2"] - pole_pad)
 
   if sum_instead:
       return pyharm.shell_sum(dump,to_average, j_slice=j_slice)
@@ -110,10 +123,23 @@ def readQuantity(dictionary, quantity):
     elif quantity == "Pb":
         quantity_index = dictionary["quantities"].index("b")
         profiles = [np.array(list[quantity_index]) ** 2 / 2.0 for list in dictionary["profiles"]]
+    elif quantity == "etaMdot":
+        quantity_index = dictionary["quantities"].index("Edot")
+        quantity_index2 = dictionary["quantities"].index("Mdot")
+        profiles = [(np.array(list[quantity_index2]) - np.array(list[quantity_index])) for list in dictionary["profiles"]]
     elif quantity == "eta":
         quantity_index = dictionary["quantities"].index("Edot")
         quantity_index2 = dictionary["quantities"].index("Mdot")
-        profiles = [(np.array(list[quantity_index2]) - np.array(list[quantity_index])) / np.array(list[quantity_index2]) for list in dictionary["profiles"]]
+        i5 = np.argmin(abs(dictionary["radii"] - 5))
+        Mdot_normalize = np.array([list[quantity_index2] for list in dictionary["profiles"]])
+        zones = np.array(dictionary["zones"])
+        Mdot_normalize = [Mdot_normalize[np.argwhere(zones[:i] == 0)[-1,0]] if zones[i]!=0 and i > zones[0] else Mdot_normalize[i] for i in range(len(Mdot_normalize))]
+        #for i, zone in enumerate(dictionary["zones"]):
+        #    if zone != 0 and i > dictionary["zones"][0]:
+        #        pdb.set_trace()
+        #        print(i, np.argwhere(np.array(dictionary["zones"])[:i] == 0)[-1,0])
+
+        profiles = [(np.array(list[quantity_index2]) - np.array(list[quantity_index])) / np.array(list[quantity_index2])[i5] for list in dictionary["profiles"]]
     else:
         # just reading the pre-calculated quantities
         quantity_index = dictionary["quantities"].index(quantity)
@@ -144,7 +170,7 @@ def readTimeSeries(D, quantity, radius=100, tmax=None):
 
 def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescale=False, tmax=None, radius=None):
     store_Mdot10 = False
-    if quantity == "eta" or quantity == "phib":
+    if quantity == "eta" or quantity == "phib" or quantity == "eta_EM":
         store_Mdot10 = True
 
     # set radius
@@ -168,6 +194,9 @@ def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescal
     if quantity == "eta":
         quantity_arr, times = readTimeSeries(D, "Edot", radius, tmax)
         quantity_arr2, _ = readTimeSeries(D, "Mdot", radius, tmax)
+    elif quantity == "etaB":
+        quantity_arr, times = readTimeSeries(D, "Edot", radius, tmax)
+        quantity_arr2, _ = readTimeSeries(D, "Mdot", radius, tmax)
     elif quantity == "eta_EM":
         quantity_arr, times = readTimeSeries(D, "Edot_EM", radius, tmax)
         quantity_arr2, _ = readTimeSeries(D, "Mdot", radius, tmax)
@@ -180,7 +209,8 @@ def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescal
         quantity_arr, times = readTimeSeries(D, quantity, radius, tmax)
 
     if store_Mdot10:
-        Mdot_save, _ = readTimeSeries(D, "Mdot", 10, tmax)
+        #Mdot_save, _ = readTimeSeries(D, "Mdot", 10, tmax)
+        Mdot_save, _ = readTimeSeries(D, "Mdot", 5, tmax)
     innermost = np.array(D["zones"]) == 0  # <= 1 #
 
     r_sonic = D["dump"]["rs"]
@@ -190,7 +220,7 @@ def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescal
     if tmax is None: last_time = times[-1]
     else: last_time = tmax * tB
 
-    if rescale and quantity == "Mdot":
+    if rescale and (quantity == "Mdot" or quantity == "etaB"):
         print("t={:.5g}-{:.5g}".format(last_time/average_factor, last_time))
         Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot)[0]
         rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot)[0]
@@ -200,7 +230,8 @@ def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescal
         i_keep = np.argwhere((times < last_time) & (times > last_time / average_factor) & (zones == rB_zone))
         rho_save = np.mean(rho_save[i_keep])
         print("rho_save={:.5g}, factor={:.5g}".format(rho_save, rho_analytic / (Mdot_analytic * rho_save)))
-        quantity_arr *= rho_analytic / (Mdot_analytic * rho_save)
+        Mdot_analytic *= rho_save / rho_analytic
+        if quantity == "Mdot": quantity_arr /= Mdot_analytic
 
     if store_Mdot10 and use_Mdot_mean:
         i_keep = np.argwhere((times < last_time) & (times > last_time / average_factor) & (innermost[:len(times)]))
@@ -211,6 +242,10 @@ def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescal
         quantity_arr = (quantity_arr2 - quantity_arr) / Mdot_save
     elif quantity == "eta_EM":
         quantity_arr = (-quantity_arr) / Mdot_save
+    elif quantity == "etaB":
+        quantity_arr = (quantity_arr2 - quantity_arr) / Mdot_analytic
+        if rescale:
+            quantity_arr
     elif quantity == "phib":
         quantity_arr /= np.sqrt(Mdot_save)
 
@@ -231,15 +266,33 @@ def plot_shell_summed(ax, dump, x, var, color="k", lw=5, j_slice=slice(None), la
     ax.plot(x, -var, color=color, lw=lw, ls=":", alpha=alpha)
     return var
 
-def extractQuantity(D, quantity, average_factor=2.0, return_mean=True, use_Mdot_mean=True, verbose=False):
+def extractQuantity(D, quantity, tmax=None, average_factor=2.0, return_mean=True, use_Mdot_mean=True, verbose=False):
     # extract steady state of the quantity
-    quantity_arr, _ = processTimeSeries(D, quantity, use_Mdot_mean=use_Mdot_mean, average_factor=average_factor)
+    r_sonic = D["dump"]["rs"]
+    mdot = D["dump"]["mdot"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    tB = np.power(rB, 3./2)
+    
     innermost = np.array(D["zones"]) == 0  # <= 1 #
+    times = np.array(D["times"])[innermost]
+    i_keep = None
+    if tmax is not None:
+        if times[-1] <= tmax * tB:
+            print("the time series not reached tmax of {:.3g} yet".format(tmax * tB))
+        else:
+            i_keep = times < tmax * tB
+            times = times[i_keep]
+    times = times[int(float(len(times)) / average_factor) :]
+    if quantity == "time":
+        return times / tB
+
+    quantity_arr, _ = processTimeSeries(D, quantity, use_Mdot_mean=use_Mdot_mean, average_factor=average_factor)
     quantity_arr = quantity_arr[innermost]
+    if tmax is not None and i_keep is not None:
+        quantity_arr = quantity_arr[i_keep]
+    
     quantity_arr = quantity_arr[int(float(len(quantity_arr)) / average_factor) :]
     if verbose: 
-        times = np.array(D["times"])[innermost]
-        times = times[int(float(len(times)) / average_factor) :]
         print("t={:.5g}-{:.5g}".format(times[0], times[-1]))
     if return_mean: return np.mean(quantity_arr)
     else: return quantity_arr
@@ -274,8 +327,7 @@ def extract_rth_info(fnames, quantity, radii, num_files=-1, which="phiav"):
     return quantity_arr
 
 def extract_shellsum(fnames, quantity, radii, num_files=-1):
-    # each dumps shell sum
-    #fnames = sorted(glob.glob('../data/' + dirtag + '/*out0.*.phdf'))
+    # shell sum directly from each dumps
     if num_files == -1: num_files = len(fnames) // 2
     quantity_arr = np.zeros((len(radii), num_files))
 
@@ -305,4 +357,4 @@ def corr(t1, t2):
     return p_t
 
 if __name__ == "__main__":
-    print(eta_BZ6(0.9375, 50.18, 0.03))
+    print(eta_BZ6(0.9375, 50.18, 0.05))

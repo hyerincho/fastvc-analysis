@@ -32,6 +32,10 @@ def shellAverage(dump, quantity, imin=0, density_weight=True, pole_pad=1):
         return -pyharm.shell_sum(dump, "FE_Fl")
     elif quantity == "Edot_EM":
         return -pyharm.shell_sum(dump, "FE_EM")
+    elif quantity == "Edot_KE":
+        return -pyharm.shell_sum(dump, "FE_PAKE")
+    elif quantity == "Edot_TE":
+        return -pyharm.shell_sum(dump, "FE_EN")
     elif quantity == "pdot":
         return pyharm.shell_sum(dump, "Fp")
     elif quantity == "Phib":
@@ -107,6 +111,7 @@ def computeAllProfiles(
     print("calculating " + runName)
 
     allFiles = glob.glob(os.path.join(runName, "*.phdf"))
+    #allFiles = glob.glob(os.path.join(runName, "*out0.0*.phdf")) # temp
     if len(allFiles) < 1:
         print("WARNING: phdf files don't exist, trying out rhdf files.")
         allFiles = glob.glob(os.path.join(runName, "*.rhdf"))
@@ -266,11 +271,14 @@ if __name__ == "__main__":
 
     inName = os.path.join(grmhdLocation, run)
     outName = os.path.join(dataLocation, run + "_profiles_all.pkl")
+    #outName = os.path.join(dataLocation, run + "_profiles_Eonly.pkl") # temp
     quantityList = [
         "Ldot",
         "Edot",
         "Edot_Fl",
         "Edot_EM",
+        #"Edot_KE",
+        #"Edot_TE",
         "Mdot",
         "Mdot_in",
         "Mdot_out",
