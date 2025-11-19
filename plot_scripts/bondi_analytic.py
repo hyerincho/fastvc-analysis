@@ -6,10 +6,7 @@ import pdb
 
 # TODO: make this part a function to determine all constants as a fxn of gam, mdot, rs
 
-gam= 5./3
 #rs=np.power(10.,2.5) #16 #
-
-n= 1./(gam-1.)
 
 def get_Tfunc(T,r):
     #result = np.power(1.+(1.+n)*T,2.)*(1.-2.*mdot/r+np.power(C1/(np.power(r,2.)*np.power(T,n)),2))-C2
@@ -17,8 +14,10 @@ def get_Tfunc(T,r):
     result = (-2/r+np.power(utemp,2))+(2.*(1.+n)*T+np.power((1.+n)*T,2))*(1.-2./r+np.power(utemp,2))-C2prime
     return result
 
-def define_globals(rs_in, mdot_in=1.):
-    global rs, mdot, C1, C2, C2prime
+def define_globals(rs_in, mdot_in=1., gam_in=5./3.):
+    global gam, n, rs, mdot, C1, C2, C2prime
+    gam=gam_in
+    n=1./(gam-1.)
     rs=rs_in
     mdot=mdot_in
     uc= np.sqrt(1./(2.*rs))
@@ -98,8 +97,8 @@ def get_T(r, ax=None, inflow_sol=True):
     #print(r, Tmin, Tmax, Th)
     return Th
 
-def get_quantity_for_rarr(rarr,quantity,rs=np.power(10.,2.5),mdot=1.):
-    define_globals(rs,mdot)
+def get_quantity_for_rarr(rarr,quantity,rs=np.power(10.,2.5),mdot=1.,gam=5./3):
+    define_globals(rs,mdot,gam)
     Tarr=np.array([get_T(r) for r in rarr])
     #Tarr=np.array([get_T(r,C1,C2,n) for r in rarr])
     if mdot == 1: Kn = 1.
@@ -136,6 +135,7 @@ def get_quantity_for_rarr(rarr,quantity,rs=np.power(10.,2.5),mdot=1.):
 def _main():
     rarr= np.logspace(np.log10(2.1),np.log10(1e9),100)
 
+    print(get_quantity_for_rarr([1],"RB", rs=50000, mdot=1.832747665572202,gam=4./3))
     if 0:
         Tarr=[]
         for r in rarr:
@@ -147,7 +147,7 @@ def _main():
         #plt.loglog(rarr,rhoarr)
         plt.loglog(rarr,Tarr)
         plt.savefig("./temp.png")
-    else:
+    if 0:
         fig,ax=plt.subplots(1,1,figsize=(8,6))
         T=get_T(1e8,C1,C2,n,ax,inflow_sol=True)
         rho=np.power(T,n)
