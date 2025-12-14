@@ -18,7 +18,7 @@ def tg2tcap(t, tcap):
 def tcap2tg(t, tcap):
     return t * tcap
 
-def plotEvolution(pkl, ax_passed=None, quantity="eta", average_factor=2, xaxis_t=False, use_Mdot_mean=False, scale_tB=False, rescaleMdot=False, color='k', label="__nolegend__", tmax=None, show_avg=False, show_negative=True, perzone_avg_frac=1., only_selectively_show=False, take_mean=False, radius=None):
+def plotEvolution(pkl, ax_passed=None, quantity="eta", average_factor=2, xaxis_t=False, use_Mdot_mean=False, scale_tB=False, rescaleMdot=False, color='k', alpha=1., label="__nolegend__", tmax=None, show_avg=False, show_negative=True, perzone_avg_frac=1., only_selectively_show=False, take_mean=False, radius=None):
     matplotlib_settings()
     print(pkl)
     plt.rcParams.update({"font.size": 25})
@@ -56,6 +56,7 @@ def plotEvolution(pkl, ax_passed=None, quantity="eta", average_factor=2, xaxis_t
         if only_selectively_show:
             quantity_arr[~innermost] = None
             quantity_arr[np.gradient(xaxis) > 1] = None # also flag out any artifact of the restarting
+            quantity_arr[quantity_arr < 0] = None # flag out negative quantity
             switch_on_ncycle = D["ncycle_per_zone"] > 0
             if switch_on_ncycle:
                 switch_list = D["cycles"][:len(times)]
@@ -74,12 +75,12 @@ def plotEvolution(pkl, ax_passed=None, quantity="eta", average_factor=2, xaxis_t
                 print("NOT SUPPORTED YET")
             mask = np.isfinite(quantity_arr)
             if "Omega" in quantity:
-                ax.plot(xaxis[mask], quantity_arr[mask], color=color, label=label, marker='.', markersize=10)
+                ax.plot(xaxis[mask], quantity_arr[mask], color=color, alpha=alpha, label=label, marker='.', markersize=10)
                 ax.axhline(0, color='k', ls=':')
-            else: ax.semilogy(xaxis[mask], quantity_arr[mask], color=color, label=label, marker='.', markersize=10) #, ls='None')
+            else: ax.semilogy(xaxis[mask], quantity_arr[mask], color=color, alpha=alpha, label=label, marker='.', markersize=10) #, ls='None')
         else: 
-            ax.semilogy(xaxis, quantity_arr, color=color, label=label)
-            if show_negative: ax.semilogy(xaxis, -quantity_arr, color=color, ls=":")
+            ax.semilogy(xaxis, quantity_arr, color=color, alpha=alpha, label=label)
+            if show_negative: ax.semilogy(xaxis, -quantity_arr, color=color, alpha=alpha, ls=":")
     else:
         xaxis = np.arange(len(quantity_arr))
         if "Omega" in quantity:
@@ -318,6 +319,156 @@ def plotOmegaFieldEvolution(dirtag, ax_passed=None, xaxis_t=False):
     else:
         return ax
 
+def plotHistogram(pkl, ax_passed=None, quantity="eta", average_factor=2, use_Mdot_mean=False, rescaleMdot=False, tmax=None, perzone_avg_frac=0.05, radius=None, color='k', normalize=True, only_active_zone=True):
+    matplotlib_settings()
+    print(pkl)
+    plt.rcParams.update({"font.size": 25})
+    if ax_passed is None:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    else:
+        ax = ax_passed
+
+    with open(pkl, "rb") as openFile:
+        D = pickle.load(openFile)
+    
+    dump = D["dump"]
+    r_sonic = D["dump"]["rs"]
+    mdot = D["dump"]["mdot"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    rEH = D["dump"]["r_eh"]
+    if radius is None:
+        if quantity == "Mdot":
+            radius = rEH
+        elif quantity == "phib":
+            radius = rEH
+        elif quantity == "eta":
+            radius = rB / 3.
+    quantity_arr, times = processTimeSeries(D, quantity, use_Mdot_mean=use_Mdot_mean, rescale=rescaleMdot, tmax=tmax, average_factor=average_factor, radius=radius)
+    times /= np.power(rB, 3./2.)
+    zones = np.array(D["zones"][:len(times)])
+    
+    switch_on_ncycle = D["ncycle_per_zone"] > 0
+    if switch_on_ncycle:
+        switch_list = D["cycles"][:len(times)]
+        switch_pt = set(D["n0_zone"])
+        switch_pt = np.array(sorted(switch_pt) + [switch_list[-1]])
+        switch_num = np.array([0 if c==0 else np.argwhere((c > switch_pt[:-1]) & (c <= switch_pt[1:]))[0,0] for c in switch_list])
+        keep = (switch_pt[switch_num + 1] - switch_list <= (switch_pt[switch_num + 1] - switch_pt[switch_num]) * perzone_avg_frac)
+        quantity_arr = quantity_arr[keep]# = None
+        times = times[keep]
+        zones = zones[keep]
+    else:
+        print("NOT SUPPORTED YET")
+    if only_active_zone:
+        active_range = D["active_range"]
+        zone_num = np.where(np.array(active_range)[:,0] * np.sqrt(8.) > radius)[0][0]-1 # TODO: take base instead of 8
+        if zone_num < 0: zone_num = 0 # for the innermost zone
+        i_keep = (zones == zone_num)
+        quantity_arr = quantity_arr[i_keep]
+        times = times[i_keep]
+    i_keep = np.argwhere((times < tmax) & (times > tmax / average_factor))
+    quantity_arr = quantity_arr[i_keep]
+    times = times[i_keep]
+
+
+    log = False
+    rng = (np.nanmin(quantity_arr),np.nanmax(quantity_arr))
+    if quantity == "Mdot" or quantity == "eta":
+        log = True
+        quantity_arr = np.log10(quantity_arr)
+        if quantity == "eta": rng = (-3,1)
+    elif quantity == "phib":
+        rng = (10, 60)
+        
+    counts, bins = np.histogram(quantity_arr, range=rng, bins=10)
+    print("N = {}".format(np.sum(counts)))
+    if normalize:
+        counts = counts / np.sum(counts)
+        ax.set_ylim([0,0.8])
+    ax.stairs(counts, bins, color=color)
+
+    label = variableToLabel(quantity)
+    if rescaleMdot and quantity == "Mdot": label = label.replace('arb. units', r'$\dot{M}_B$')
+    if log:
+        label = r"$\log_{\rm 10}($" + label + r"$)$"
+    ax.set_xlabel(label)
+
+    # calc mean
+    if log:
+        quantity_arr = np.power(10, quantity_arr)
+    mean = np.nanmean(quantity_arr)
+    print("mean of " + quantity + " is {:.5g}".format(mean))
+    if 1:
+        if log:
+            mean = np.log10(mean)
+        ax.plot(mean, 0.01, color=color, marker='x', ms=10)
+
+    if ax_passed is None:
+        fig.tight_layout()
+        output = "../plots/plot_histogram_" + quantity + ".png"
+        plt.savefig(output, bbox_inches="tight")
+        print("saved to " + output)
+        plt.close(fig)
+    else:
+        return ax
+
+def compareHistogram(a=0.9, quantity="eta"):
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    if a == 0.9:
+        dirtags = [
+            "101225_n4_a0.9_bondi_nocap_momcons",
+            "092525_a0.9_rB2e3_mom_cons",
+            "delta/092525_a0.9_rB2e4_mom_cons",
+            "092525_a0.9_rB2e5_mom_cons_test",
+            "092525_a0.9_rB2e6_momcons",
+                ]
+    elif a == 0.7:
+        dirtags = [
+            "111725_n4_a0.7_bondi_nocap_momcons",
+            "delta/102825_a0.7_rB2e3_momcons",
+            "delta/102825_a0.7_rB2e4_momcons",
+            "delta/092425_a0.7_rB2e5_momcons",
+            #"110725_a0.7_rB2e6_momcons",
+                ]
+    elif a == 0.5:
+        dirtags = [
+            "111725_n4_a0.5_bondi_nocap_momcons",
+            "delta/102825_a0.5_rB2e3_momcons",
+            "delta/102825_a0.5_rB2e4_momcons",
+            "delta/092425_a0.5_rB2e5_momcons",
+            "110725_a0.5_rB2e6_momcons",
+                ]
+    elif a == 0.3:
+        dirtags = [
+            "111725_n4_a0.3_bondi_nocap_momcons",
+            "delta/102825_a0.3_rB2e3_momcons",
+            "delta/102825_a0.3_rB2e4_momcons",
+            "delta/092425_a0.3_rB2e5_momcons",
+            "110725_a0.3_rB2e6_momcons",
+                ]
+    elif a == 0.1:
+        dirtags = [
+            "111725_n4_a0.1_bondi_nocap_momcons",
+            "delta/102825_a0.1_rB2e3_momcons",
+            "delta/102825_a0.1_rB2e4_momcons",
+            "delta/092425_a0.1_rB2e5_momcons",
+            "110725_a0.1_rB2e6_momcons",
+                ]
+    tmaxs = [400] + [700] * (len(dirtags) - 1)
+    colors = plt.cm.plasma(np.linspace(0., 1., len(dirtags)))
+    for i,dirtag in enumerate(dirtags):
+        pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
+        ax = plotHistogram(pkl_name, ax_passed=ax, quantity=quantity, tmax=tmaxs[i], color=colors[i]) #, perzone_avg_frac=0.5)
+
+    ax.set_title(r"$a_*=$" + str(a))
+
+    # save
+    output = "../plots/compare_histogram_" + quantity + "_a" + str(a) + ".png"
+    plt.savefig(output, bbox_inches="tight")
+    print("saved to " + output)
+    plt.close(fig)
 
 if __name__ == "__main__":
     dirtag = "100724_a0.5_n4"
@@ -335,18 +486,18 @@ if __name__ == "__main__":
     dirtag="041625_n4_a0.9_toriilike_jks2_smth2_reconnect"
     dirtag = "042325_a0.9_rB2e5_bondi"
     dirtag="043025_a0.9_rB2e3_bondi_eks"
-    dirtag="050625_a0.9_rB2e5_oz_test"
+    #dirtag="050625_a0.9_rB2e5_oz_test"
     #dirtag="051225_a0.5_rB2e5_toriilike_beta1"
     #dirtag="051225_n4_a0.9_torrilike_nocap_newflr"
     #dirtag="051225_n4_a-0.9_toriilike_eks"
     #dirtag="051225_oz_a0.9_toriilike_newflr"
-    #dirtag="051225_oz_a0.9_bondi_newflr"
+    dirtag="051225_oz_a0.9_bondi_newflr"
     #dirtag="051225_n4_a0.9_bondi_newflr"
     #dirtag="delta/051325_a0.9_rB2e5_bondi_eks"
     #dirtag="051325_a0.0_rB2e5_eks"
     #dirtag="052125_torus_noehbuffer_noismr_a0.5"
     #dirtag="052725_torus_noehbuffer_noismr_a0.5_diffflr"
-    dirtag="052825_a0.9_rB2e5_bondi_eks_largerout"
+    #dirtag="052825_a0.9_rB2e5_bondi_eks_largerout"
     #dirtag="052825_n4_a-0.9_torilike_nocap_newflr"
     #dirtag="080425_a0.9_rB2e5_fafout" #mixedinverter" #avgneighbor" #sigma10" #
     #dirtag="080625_a0.9_rB2e3_mixedinverter"
@@ -354,13 +505,24 @@ if __name__ == "__main__":
     #dirtag="080625_a0.9_rB2e5_96"
     #dirtag="082725_a0.9_rB2e3_fafout"
     #dirtag="091525_a0.9_rB2e5_normal-recovery"
-    #dirtag="092525_a0.9_rB2e5_mom_cons_test" #_all" #
+    dirtag="092525_a0.9_rB2e5_mom_cons_test" #_all" #
+    #dirtag="092525_a0.9_rB2e6_momcons"
+    #dirtag="delta/102825_a0.7_rB2e3_momcons"
+    #dirtag="102125_a0.9_rB2e5_mom_cons_96"
+    #dirtag="102925_a0.97_rB2e3"
+    #dirtag="111025_a0.9_rB2e3_Btor"
+    dirtag="111725_a0.9_rB2e3_Btor_T+"
+    #dirtag="111725_a0.9_rB2e5_mom_cons_rdepgmax"
+    #dirtag="120325_a0.9_rB2e5_mom_cons_rdepgmax_uconst"
     pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
 
     average_factor = 1.25 #1.5  # 2 #
     quantities = ["Mdot", 'eta', 'Omega10', 'phib'] #["Mdot", "eta", "phib"]  # 
-    plotEvolutionMultipanel(pkl_name, quantities=quantities, average_factor=average_factor, xaxis_t=True) #False)  # 
+    #plotEvolutionMultipanel(pkl_name, quantities=quantities, average_factor=average_factor, xaxis_t=True) #False)  # 
     #for q2 in ['Mdot']: #'inv_abs_u^th', 'Omega2', 'Omega5', 'Omega10', 'Omega50', 'phib']:
     #    plotCorrelation(pkl_name, q1='eta', q2=q2) #, last_factor=1.2)
     #plotOmegaEvolution(pkl_name)
     #plotOmegaFieldEvolution(dirtag)
+    #plotHistogram(pkl_name, tmax=700)
+    for a in [0.1, 0.3, 0.5, 0.7, 0.9]:
+        compareHistogram(a, "phib")

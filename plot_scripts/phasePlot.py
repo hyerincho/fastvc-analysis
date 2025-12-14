@@ -280,18 +280,19 @@ if __name__ == "__main__":
         #"042225_n4_a0.9_bondi_jks2_nocap"
         #"043025_a0.9_rB2e3_bondi_eks"
         #"030725_a0.9_safe_longtin20"
-        "051225_oz_a0.9_toriilike_newflr"
+        #"051225_oz_a0.9_toriilike_newflr"
+        "092525_a0.9_rB2e5_mom_cons_test"
     ]
     labels = ['bondi'] #["oz", "oz_jks", "mz", "mz_jks", "oz_tl", "mz_tl", "mz_tl_jks", "mz_tl_-.9", "mz_tl_nocap", "2e3", "2e5", "+", "-"]  # "mz_tl_0","mz_jks_ca", 
     colors = ["black", "tab:blue", "c", "g", "r", "tab:orange", "m", "y", "pink", "peru", "orange", "r", 'm']  # colors for each runs #"gray", 
     compare_eta_phib(dirtags, labels, colors, 2., use_Mdot_mean=False)  # 1.1)
-    dirtag="051225_oz_a0.9_bondi_newflr" #"051225_n4_a0.9_bondi_newflr" #"052825_n4_a-0.9_torilike_nocap_newflr" #"043025_a0.9_rB2e5_bondi_eks" #"051225_n4_a-0.9_toriilike_eks" #"041825_a0.9_rB2e5_jks2_smth2" #"042325_a0.9_rB2e5_bondi" #"042225_n4_a0.9_toriilike_jks2_nocap" #"042225_n4_a0.9_retrograde" #"042125_n4_a0.9_bondi_jks2" #"delta/030525_a0.9_oz" #"041625_n4_a0.9_toriilike_jks2_smth2_reconnect" #
+    dirtag="051225_oz_a0.9_bondi_newflr" #"052825_a0.9_rB2e5_bondi_eks_largerout" #"051225_n4_a0.9_bondi_newflr" #"051225_n4_a0.9_bondi_nocap_newflr" #"052825_n4_a-0.9_torilike_nocap_newflr" #"043025_a0.9_rB2e5_bondi_eks" #"051225_n4_a-0.9_toriilike_eks" #"041825_a0.9_rB2e5_jks2_smth2" #"042325_a0.9_rB2e5_bondi" #"042225_n4_a0.9_toriilike_jks2_nocap" #"042225_n4_a0.9_retrograde" #"042125_n4_a0.9_bondi_jks2" #"delta/030525_a0.9_oz" #"041625_n4_a0.9_toriilike_jks2_smth2_reconnect" #
     #scatter_q1_q2(dirtag, q1='abs_u^th', q2='phib', average_factor=2, use_Mdot_mean=False, color_eta=True, logx=True, logy=True, only_use_positive_Omega=True)
     #scatter_q1_q2(dirtag, q1='abs_u^phi', q2='phib', average_factor=2, use_Mdot_mean=False, color_eta=True, logx=True, logy=True)
     #scatter_q1_q2(dirtag, q1='u^th', q2='eta', average_factor=2, use_Mdot_mean=False, color_eta=True, logx=False, logy=True, use_thinfo_q1=True, only_use_positive_Omega=True)
     #scatter_q_complex(dirtag, q='u^th', color_eta=True)
     #scatter_q1_q2(dirtag, q1='u^phi', q2='phib', average_factor=2, use_Mdot_mean=False, color_eta=True, logx=False, logy=True)
-    #scatter_Omega_q2(dirtag, "eta", 50, 1.25, use_Mdot_mean=False, color_eta=False, color_time=True, use_midplane_Omega=False, for_paper=True) #, show_hist=True)
+    #scatter_Omega_q2(dirtag, "eta", 50, 1e5, use_Mdot_mean=False, color_eta=False, color_time=True, use_midplane_Omega=False, for_paper=True) #, show_hist=True)
     #scatter_Omega_q2(dirtag, "phib", 2, use_Mdot_mean=False, color_eta=True)
     # compare_kappa(dirtags)
 

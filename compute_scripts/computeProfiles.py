@@ -111,7 +111,7 @@ def computeAllProfiles(
     print("calculating " + runName)
 
     allFiles = glob.glob(os.path.join(runName, "*.phdf"))
-    #allFiles = glob.glob(os.path.join(runName, "*out0.0*.phdf")) # temp
+    #allFiles = glob.glob(os.path.join(runName, "*out0.0[0-4]*.phdf")) # temp
     if len(allFiles) < 1:
         print("WARNING: phdf files don't exist, trying out rhdf files.")
         allFiles = glob.glob(os.path.join(runName, "*.rhdf"))

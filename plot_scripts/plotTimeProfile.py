@@ -54,6 +54,8 @@ def plotSingleTimeProfile(pkl_name, quantity, fnum=None, time=None, cycle=None, 
         ax.set_xlim(xlim)
         if "eta" in quantity and quantity != "beta" and quantity != "etaMdot":
             ax.set_ylim([1e-3, 4])
+        elif quantity == "etaMdot":
+            ax.set_ylim([1e-5, 1e-1])
         elif quantity == "beta":
             ax.set_ylim([1e-3, 10])
         elif quantity == "phib":
@@ -82,9 +84,16 @@ def plotTimeProfilesFromDump(dirtag, quantity, fnum, nfiles=1):
 
         if quantity == "etaMdot":
             profile = pyharm.shell_sum(dump, "FE_norho")
-        elif quantity == "eta":
+        elif "eta" in quantity:
+            if quantity == "eta":
+                profile = pyharm.shell_sum(dump, "FE_norho")
+            elif quantity == "eta_EM":
+                profile = pyharm.shell_sum(dump, "FE_EM")
+            elif quantity == "eta_TE":
+                profile = pyharm.shell_sum(dump, "FE_EN")
+            elif quantity == "eta_KE":
+                profile = pyharm.shell_sum(dump, "FE_PAKE")
             i5 = np.argmin(abs(dump["r1d"] - 5))
-            profile = pyharm.shell_sum(dump, "FE_norho")
             profile /= -pyharm.shell_sum(dump, "FM")[i5]
 
         ax.plot(dump["r1d"], profile, color=colors[n])
@@ -116,14 +125,73 @@ def plotTimeProfilesFromDump(dirtag, quantity, fnum, nfiles=1):
     plt.close()
     print("saved to " + output)
 
+def plotCompareEtaFromDump():
+    matplotlib_settings()
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    
+    dirtags = [
+            "051225_oz_a0.9_toriilike_newflr",
+            "051225_n4_a0.9_toriilike_newflr",
+            "041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
+    ]
+    fnums=[4762, 2215, 2825]
+    colors = ['k', 'b', 'g']
+    for i, dirtag in enumerate(dirtags):
+        fname = glob.glob("../data/" + dirtag + "/*{:05d}.phdf".format(fnums[i]))[0]
+        dump = pyharm.load_dump(fname, ghost_zones=False)
+        r_sonic = dump["rs"]
+        mdot = dump["mdot"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        tB = np.power(rB, 3./2)
+        print(dump["n_step"], dump["t"]/tB)
+
+        eta = pyharm.shell_sum(dump, "FE_norho")
+        eta_EM = pyharm.shell_sum(dump, "FE_EM")
+        eta_TE = pyharm.shell_sum(dump, "FE_EN")
+        eta_KE = pyharm.shell_sum(dump, "FE_PAKE")
+        i5 = np.argmin(abs(dump["r1d"] - 5))
+        Mdot = -pyharm.shell_sum(dump, "FM")[i5]
+
+        ax.plot(dump["r1d"], eta/Mdot, color=colors[i])
+        ax.plot(dump["r1d"], eta_EM/Mdot, color=colors[i], ls='--')
+        ax.plot(dump["r1d"], eta_KE/Mdot, color=colors[i], ls=':')
+        ax.plot(dump["r1d"], eta_TE/Mdot, color=colors[i], ls='-.')
+
+    # Formatting
+    ax.set_xlabel("Radius [$r_g$]")
+    ylabel = variableToLabel('eta')
+    ax.set_ylabel(ylabel)
+    
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    
+    xlim = (dump["r_eh"], ax.get_xlim()[-1])
+    ax.set_xlim(xlim)
+    ax.set_ylim([1e-3, 4])
+
+
+    plot_dir = "../plots/"  # common directory
+    os.makedirs(plot_dir, exist_ok=True)
+    output = plot_dir + "/compare_eta_from_dump.png"  # pdf"
+    plt.savefig(output, bbox_inches="tight")
+    plt.close()
+    print("saved to " + output)
+
 if __name__ == "__main__":
-    dirtag = "052825_a0.9_rB2e5_bondi_eks_largerout"
+    dirtag = "051225_oz_a0.9_toriilike_newflr"
+    #dirtag = "052825_a0.9_rB2e5_bondi_eks_largerout"
     #dirtag = "073125_a0.9_rB2e5_drift_bsqoveru100" #diffbetaflr"
     #dirtag = "080425_a0.9_rB2e5_sigma10"
-    dirtag = "080425_a0.9_rB2e5_avgneighbor"
+    #dirtag = "080425_a0.9_rB2e5_avgneighbor"
     dirtag = "092525_a0.9_rB2e5_mom_cons_test"
+    #dirtag = "111725_a0.9_rB2e5_mom_cons_rdepgmax"
+    #dirtag = "120325_a0.9_rB2e5_mom_cons_rdepgmax_uconst"
+    dirtag="120525_a0.9_rB2e5_mom_cons_rdepgmax3_uconst"
+    #dirtag="121025_a0.9_rB2e5_mom_cons_rdepgmax4"
+    #dirtag="121025_a0.9_rB2e5_mom_cons_rdepgmax_full"
     pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
-    #plotSingleTimeProfile(pkl_name, 'etaMdot', fnum=4753, nfiles=1)
-    #plotTimeProfilesFromDump(dirtag, 'eta', fnum=4762, nfiles=10)
+    #plotSingleTimeProfile(pkl_name, 'etaMdot', fnum=16, nfiles=4)
+    plotTimeProfilesFromDump(dirtag, 'eta', fnum=38, nfiles=4)
+    #plotCompareEtaFromDump()
     #plotTimeProfilesFromDump(dirtag, 'eta', fnum=580, nfiles=10)
-    plotTimeProfilesFromDump(dirtag, 'eta', fnum=830, nfiles=7)
+    #plotTimeProfilesFromDump(dirtag, 'eta', fnum=830, nfiles=7)

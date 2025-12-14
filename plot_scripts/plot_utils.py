@@ -140,6 +140,14 @@ def readQuantity(dictionary, quantity):
         #        print(i, np.argwhere(np.array(dictionary["zones"])[:i] == 0)[-1,0])
 
         profiles = [(np.array(list[quantity_index2]) - np.array(list[quantity_index])) / np.array(list[quantity_index2])[i5] for list in dictionary["profiles"]]
+    elif quantity == "phib":
+        quantity_index = dictionary["quantities"].index("Phib")
+        quantity_index2 = dictionary["quantities"].index("Mdot")
+        i5 = np.argmin(abs(dictionary["radii"] - 5))
+        Mdot_normalize = np.array([list[quantity_index2] for list in dictionary["profiles"]])
+        zones = np.array(dictionary["zones"])
+        Mdot_normalize = [Mdot_normalize[np.argwhere(zones[:i] == 0)[-1,0]] if zones[i]!=0 and i > zones[0] else Mdot_normalize[i] for i in range(len(Mdot_normalize))]
+        profiles = [np.array(list[quantity_index]) / np.sqrt(np.array(list[quantity_index2])[i5]) for list in dictionary["profiles"]]
     else:
         # just reading the pre-calculated quantities
         quantity_index = dictionary["quantities"].index(quantity)

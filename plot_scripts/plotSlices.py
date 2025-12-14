@@ -194,6 +194,8 @@ def tavgedSlice(dirtag, quantity, num_files=-1, native=True, sum_each_ann=False,
     # plot settings
     if quantity == "K":
         vmin = 1e0; vmax = 1e4
+    elif quantity == "Theta":
+        vmin = 8e-6; vmax = 1
     elif quantity == "rho":
         vmin = 1e-9; vmax = 1e-3
     elif quantity == "betagamma":
@@ -313,6 +315,107 @@ def plotOmegaFieldvsTh(dirtag, ax_passed=None, num_files=-1):
     else:
         return ax
 
+def plotTavgedEtaFromDump(tmax=None, average_factor=1.25):
+    # WIP
+    matplotlib_settings()
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    
+    dirtags = [
+            "051225_n4_a0.9_toriilike_newflr",
+            "041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
+            "051225_oz_a0.9_toriilike_newflr",
+    ]
+    colors = ['b', 'g', 'k']
+    
+    # Formatting
+    ax.set_xlabel("Radius [$r_g$]")
+    ylabel = variableToLabel('eta')
+    ax.set_ylabel(ylabel)
+    
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    
+    ax.set_xlim([2, 3e4])
+    ax.set_ylim([1e-3, 4])
+
+    for i, dirtag in enumerate(dirtags):
+        files = sorted(glob.glob("../data/" + dirtag + "/*out*.phdf"))[::-1]
+
+        # basic information
+        dump = pyharm.load_dump(files[0])
+        oz = (dump["driver/type"] == "kharma")
+        if not oz:
+            nzeff = dump["Params"]["Multizone/nzones_eff"]
+        r_sonic = dump["rs"]
+        mdot = dump["mdot"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        tB = np.power(rB, 3./2)
+        i5 = np.argmin(abs(dump["r1d"] - 5))
+        
+        # initialization
+        eta = 0.
+        etaEM = 0.
+        etaTE = 0.
+        etaKE = 0.
+        Mdot = 0.
+        num_sum = 0
+        first_time = -1
+        last_time = tmax * tB
+        
+        for fname in files:
+            dump = pyharm.load_dump(fname, ghost_zones=False)
+            if oz: i_zone = 0
+            else:
+                iwv = dump["Params"]["Multizone/i_within_vcycle"]
+                i_zone = abs(iwv - (nzeff - 1))
+
+            if dump["t"] < tmax * tB / average_factor:
+                break
+            elif dump["t"] <= tmax * tB:
+                if i_zone == 0: # TODO only prioritizing inner so far
+                    eta += pyharm.shell_sum(dump, "FE_norho")
+                    etaEM += pyharm.shell_sum(dump, "FE_EM")
+                    etaTE += pyharm.shell_sum(dump, "FE_EN")
+                    etaKE += pyharm.shell_sum(dump, "FE_PAKE")
+                    Mdot += -pyharm.shell_sum(dump, "FM")[i5]
+                    num_sum += 1
+
+        # normalize
+        eta /= Mdot
+        etaEM /= Mdot
+        etaTE /= Mdot
+        etaKE /= Mdot
+
+        ax.plot(dump["r1d"], eta, color=colors[i])
+        ax.plot(dump["r1d"], etaEM, color=colors[i], ls="--")
+        ax.plot(dump["r1d"], etaKE, color=colors[i], ls=':')
+        ax.plot(dump["r1d"], etaTE, color=colors[i], ls="-.")
+    
+        # save plot
+        print(dirtag)
+        output = "../plots/tavged_eta_from_dump.png"
+        fig.savefig(output,bbox_inches='tight')
+        print("saved to " + output)
+        #plt.close()
+    
+def jet_slice(dirtag, fnum):
+    matplotlib_settings()
+    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+    
+    plotrc={}
+    plotrc.update({'no_title': True, 'shading': 'flat', 'native':True, 'average':True})
+    fn = glob.glob("../data/" + dirtag + "/*{:05d}*.phdf".format(fnum))[0]
+    dump = pyharm.load_dump(fn,ghost_zones=False)
+    #window = (np.log10(dump["r_eh"]), np.log10(dump["r_out"]), 0, np.pi)
+    window = (np.log10(dump["r_eh"]), 6, 0, np.pi)
+    im1 = pyharm.plots.plot_xz(ax, dump, "log_Gamma", window=window, vmin=1, vmax=4, cmap='gist_heat', **plotrc)
+
+    output = "../plots/jet_slice.png"
+    plt.savefig(output, bbox_inches="tight")
+    plt.close()
+    print("saved to " + output)
+
+
 if __name__ == "__main__":
     dirtag = "010625_a0.5_oz_128"
     dirtag = "010925_a0.9_oz_128"
@@ -326,16 +429,16 @@ if __name__ == "__main__":
     #dirtag = "042325_a0.9_rB2e5_bondi"
     #dirtag="043025_a0.9_rB2e5_bondi_eks"
     dirtag="031425_a0.5_torus_rn22_noreconnect"
-    #dirtag="031325_a0.9_torus_rn22_noreconnect"
-    #dirtag="050825_torus_noehbuffer_noismr"
-    #dirtag="052125_torus_noehbuffer_noismr_a0.5"
-    #dirtag="052525_torus_noehbuffer_noismr_a0.5_nofofc"
-    dirtag="052725_torus_noehbuffer_noismr_a0.5_diffflr"
-    dirtag="052825_a0.9_rB2e5_bondi_eks_largerout"
+    dirtag="2025/041825_a0.9_rB2e5_jks2_smth2"
+    #dirtag="052825_a0.9_rB2e5_bondi_eks_largerout"
     #dirtag="053025_torus_noehbuffer_noismr_a0.5_lowx1res"
-    dirtag="080625_a0.9_rB2e5_96"
+    #dirtag="080625_a0.9_rB2e5_96"
     #dirtag="092525_a0.9_rB2e5_mom_cons_test"
+    #dirtag="051225_oz_a0.9_toriilike_newflr"
+    #dirtag="2025/041825_a0.9_rB2e5_jks2_smth2"
 
     #FE_slice(dirtag, num_files=-1, native=False, sum_each_ann=True)
-    tavgedSlice(dirtag, 'log_K', num_files=-1, native=False) #, only_sum=1) #, rscale=1)
+    #tavgedSlice(dirtag, 'log_K', num_files=-1, native=False) #, only_sum=1) #, rscale=1)
     #plotOmegaFieldvsTh(dirtag, num_files=100)
+    #plotTavgedEtaFromDump(50, 1.25)
+    jet_slice(dirtag, 28) #5224) #4783)

@@ -1,6 +1,7 @@
 from plot_utils import *
 from matplotlib import transforms
 import matplotlib.image as mpimg
+from functools import partial
 
 def Xray_approx(dump):
     # synthetic image (Lalakos+22)
@@ -71,9 +72,20 @@ def observation_compare_with_M87(fnum, show_full_sb=False):
         window = (-sz, sz, -sz, sz)
         im = pyharm.plots.plot_xz(ax[i], dump, "log_Theta", window=window, vmin=8e-6, vmax=1, cmap='gist_heat', **plotrc)
         
-        scale = np.power(10,np.floor(np.log10(sz)))
         c= 'white'
-        scalebar = AnchoredSizeBar(ax[i].transData, scale, r'$10^{:d}\, r_g$'.format(int(np.log10(scale))), 'upper right', pad=0.5, color=c, frameon=False, size_vertical=sz/8**2)
+        if show_full_sb:
+            sz_pc = rg2pc(sz, M=2.5e9*u.Msun)#.value()
+            scale = np.power(10,np.floor(np.log10(sz_pc)))
+            scale_rg = pc2rg(scale, M=2.5e9*u.Msun)
+            #pdb.set_trace()
+            if int(np.log10(scale)) == -3: label = r'${\rm mpc}$'
+            elif int(np.log10(scale)) == -1: label = r'$0.1{\rm pc}$'
+            elif int(np.log10(scale)) == 2: label = r'$0.1{\rm kpc}$'
+            scalebar = AnchoredSizeBar(ax[i].transData, scale_rg, label, 'upper right', pad=0.5, color=c, frameon=False, size_vertical=sz/8**2)
+        else:
+            scale = np.power(10,np.floor(np.log10(sz)))
+            scale_rg = scale
+            scalebar = AnchoredSizeBar(ax[i].transData, scale_rg, r'$10^{:d}\, r_g$'.format(int(np.log10(scale))), 'upper right', pad=0.5, color=c, frameon=False, size_vertical=sz/8**2)
         ax[i].add_artist(scalebar)
         ax[i].title.set_visible(False)
         
@@ -86,8 +98,8 @@ def observation_compare_with_M87(fnum, show_full_sb=False):
         patch_sz[i] = sz
         # connect
         c_connect = 'k' #'magenta'
-        point, = ax_sb.plot(scale, 0.02, marker="o", color=c_connect, ms=10)
-        con1 = patches.ConnectionPatch(xyA=(scale, 0.02), xyB=(0.65*sz,0.9*sz), coordsA="data", coordsB="data", axesA=ax_sb, axesB=ax[i], color=c_connect, lw=2)
+        point, = ax_sb.plot(scale_rg, 0.02, marker="o", color=c_connect, ms=10)
+        con1 = patches.ConnectionPatch(xyA=(scale_rg, 0.02), xyB=(0.65*sz,0.9*sz), coordsA="data", coordsB="data", axesA=ax_sb, axesB=ax[i], color=c_connect, lw=2)
         fig.add_artist(con1)
 
 
@@ -120,13 +132,18 @@ def observation_compare_with_M87(fnum, show_full_sb=False):
     #ax_sb.semilogx(np.array([1,1e7]),np.array([0,0]))
     ax_sb.set_xlim([1,1e10])
     ax_sb.set_ylim([0,1])
-    #ax_sb.axvline(2e5,color='gray',ls='--') # Bondi radius
+    if 1:
+        ax_sb.axvline(2e5,color='gray',ls='--') # Bondi radius
+        ax_sb.text(3e5, 0.7, r'$R_B$', color='gray')
+    if 1:
+        for i, l in enumerate(['(a)','(b)','(c)','(d)']):
+            ax[i].text(0.05, 0.05, l, color='w', transform=ax[i].transAxes)
     #ax_sb.set_xlabel(r'r [$r_g$]')
     ax_sb.set_yticks([])
     ax_sb.tick_params(axis='x', bottom=False, labelbottom=False)
-    secax = ax_sb.secondary_xaxis('top', functions=(rg2pc, pc2rg))
+    secax = ax_sb.secondary_xaxis('top', functions=(partial(rg2pc, M=2.5e9*u.Msun), partial(pc2rg, M=2.5e9*u.Msun)))
     #secax.xaxis.set_major_locator(FixedLocator([1e-3, 1, 1e3]))
-    secax.set_xlabel(r'$R_{\rm M87}$ [pc]', labelpad=7)
+    secax.set_xlabel(r'$R$ [pc]', labelpad=7)
     ax_sb.set_xscale('log')
     # Cosmosim
     x = np.logspace(5.5, 10, 100)
