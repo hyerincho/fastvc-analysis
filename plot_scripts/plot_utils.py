@@ -6,6 +6,8 @@ import glob
 from astropy import units as u
 from astropy import constants as const
 import pyharm
+from scipy.optimize import curve_fit
+from functools import partial
 
 from matplotlib_settings import *
 import bondi_analytic as bondi
@@ -13,6 +15,39 @@ from ylabel_dictionary import *
 
 c = const.c
 G = const.G
+
+gdirtags = [
+    "121325_n4_a0.1_bondi_nocap_momcons",
+    "121325_n4_a0.3_bondi_nocap_momcons",
+    "121325_n4_a0.5_bondi_nocap_momcons",
+    "121325_n4_a0.7_bondi_nocap_momcons",
+    "121325_n4_a0.9_bondi_nocap_momcons",
+    "delta/102825_a0.1_rB2e3_momcons",
+    "delta/102825_a0.3_rB2e3_momcons",
+    "delta/102825_a0.5_rB2e3_momcons",
+    "delta/102825_a0.7_rB2e3_momcons",
+    "092525_a0.9_rB2e3_mom_cons",
+    "102925_a0.97_rB2e3",
+    "delta/102825_a0.1_rB2e4_momcons",
+    "delta/102825_a0.3_rB2e4_momcons",
+    "delta/102825_a0.5_rB2e4_momcons",
+    "delta/102825_a0.7_rB2e4_momcons",
+    "delta/092525_a0.9_rB2e4_mom_cons",
+    "delta/092425_a0.1_rB2e5_momcons",
+    "delta/092425_a0.3_rB2e5_momcons",
+    "delta/092425_a0.5_rB2e5_momcons",
+    "delta/092425_a0.7_rB2e5_momcons",
+    "092525_a0.9_rB2e5_mom_cons_test",
+    "110725_a0.1_rB2e6_momcons",
+    "110725_a0.3_rB2e6_momcons",
+    "110725_a0.5_rB2e6_momcons",
+    "110725_a0.7_rB2e6_momcons",
+    "092525_a0.9_rB2e6_momcons",
+        ]
+
+def lin_func(x, a, b):
+    return a * x + b
+
 
 def rg2pc(r,M=6.5e9*u.Msun):
     rg = G*M/c**2
@@ -177,6 +212,7 @@ def readTimeSeries(D, quantity, radius=100, tmax=None):
         return quantity_arr[i_keep], times[i_keep]
 
 def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescale=False, tmax=None, radius=None):
+    from plotProfiles import setTimeBins, get_mask, calcFinalTimeAvg, plotProfileQuantity
     store_Mdot10 = False
     if quantity == "eta" or quantity == "phib" or quantity == "eta_EM":
         store_Mdot10 = True
@@ -228,17 +264,22 @@ def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescal
     if tmax is None: last_time = times[-1]
     else: last_time = tmax * tB
 
+    Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot)[0]
     if rescale and (quantity == "Mdot" or quantity == "etaB"):
         print("t={:.5g}-{:.5g}".format(last_time/average_factor, last_time))
-        Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot)[0]
         rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot)[0]
-        rho_save, _ = readTimeSeries(D, "rho", rB, tmax)
-        zones = np.array(D["zones"][:len(rho_save)])
+        rho_save, _ = readTimeSeries(D, "rho", rB, tmax) # Cho+24 method
+        #tDivList, binNumList = setTimeBins(D, 1, time_bin_factor=average_factor, tmax=tmax)
+        #mask_list = get_mask(D, prioritize_inner=False) #True)
+        #radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, "rho", perzone_avg_frac=0.05, mask_list=mask_list)
+        #rho_save = min(profiles[0][radii[0] < 5 * rB])
+        zones = np.array(D["zones"][:len(quantity_arr)])
         rB_zone = int(np.floor(np.log(rB) / np.log(8) - 0.5))
-        i_keep = np.argwhere((times < last_time) & (times > last_time / average_factor) & (zones == rB_zone))
-        rho_save = np.mean(rho_save[i_keep])
-        print("rho_save={:.5g}, factor={:.5g}".format(rho_save, rho_analytic / (Mdot_analytic * rho_save)))
-        Mdot_analytic *= rho_save / rho_analytic
+        if 1: #use_Mdot_mean:
+            i_keep = np.argwhere((times < last_time) & (times > last_time / average_factor) & (zones == rB_zone))
+            rho_save = np.mean(rho_save[i_keep])
+            print("rho_save={:.5g}, factor={:.5g}".format(rho_save, rho_analytic / (Mdot_analytic * rho_save)))
+        Mdot_analytic = Mdot_analytic * rho_save / rho_analytic
         if quantity == "Mdot": quantity_arr /= Mdot_analytic
 
     if store_Mdot10 and use_Mdot_mean:
@@ -357,11 +398,11 @@ def extract_shellsum(fnames, quantity, radii, num_files=-1):
 
 def corr(t1, t2):
     # t1 and t2 are time series
-    f1 = np.fft.fftshift(np.fft.fft(t1))
-    f2 = np.fft.fftshift(np.fft.fft(t2))
+    f1 = (np.fft.fft(t1))
+    f2 = (np.fft.fft(t2))
 
     p_f = np.conj(f1) * f2
-    p_t = np.fft.ifft(np.fft.fftshift(p_f))
+    p_t = np.fft.ifft((p_f))
     return p_t
 
 if __name__ == "__main__":

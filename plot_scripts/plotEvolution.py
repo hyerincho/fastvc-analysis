@@ -7,7 +7,6 @@ from scipy.stats import norm
 
 from matplotlib_settings import *
 from ylabel_dictionary import *
-from plotProfiles import readQuantity
 from plot_utils import *
 
 
@@ -381,6 +380,8 @@ def plotHistogram(pkl, ax_passed=None, quantity="eta", average_factor=2, use_Mdo
             radius = rEH
         elif quantity == "eta":
             radius = rB / 3.
+        elif quantity == "etaB":
+            radius = rB / 3.
     if D["times"][-1] < tmax * np.power(rB,3./2.):
         tmax = D["times"][-1] / np.power(rB, 3./2.)
         print("new tmax is {:.5g} tB".format(tmax))
@@ -403,7 +404,8 @@ def plotHistogram(pkl, ax_passed=None, quantity="eta", average_factor=2, use_Mdo
         print("NOT SUPPORTED YET")
     if only_active_zone:
         active_range = D["active_range"]
-        zone_num = np.where(np.array(active_range)[:,0] * np.sqrt(8.) > radius)[0][0]-1 # TODO: take base instead of 8
+        try: zone_num = np.where(np.array(active_range)[:,0] * np.sqrt(8.) > radius)[0][0]-1 # TODO: take base instead of 8
+        except: zone_num = 0
         if zone_num < 0: zone_num = 0 # for the innermost zone
         i_keep = (zones == zone_num)
         quantity_arr = quantity_arr[i_keep]
@@ -416,17 +418,19 @@ def plotHistogram(pkl, ax_passed=None, quantity="eta", average_factor=2, use_Mdo
     log = False
     quantity_arr = quantity_arr[~np.isnan(quantity_arr)]
     rng = (np.min(quantity_arr),np.max(quantity_arr))
-    if quantity == "Mdot" or quantity == "eta":
+    if quantity == "Mdot" or quantity == "eta" or quantity == "etaB":
         log = True
-        if quantity == "eta": rng = (-3,1)
-        elif quantity == "Mdot": rng = (-5,0)
+        if quantity == "eta": rng = (-7.5,1.5)#(-3,1)
+        elif quantity == "Mdot": rng = (-11,0) #(-5,0)
+        elif quantity == "etaB": rng = (-6,-1)
     elif quantity == "phib":
         log = True
         rng = (1,2) #(10, 60)
     if log:
-        quantity_arr = np.log10(quantity_arr)
-        x_mean = np.nanmean(quantity_arr) #np.log10(mean**2 / np.sqrt(mean**2+sigmaX**2)) #
-        x_std = np.nanstd(quantity_arr) #np.log10(1. + sigmaX ** 2 / mean **2) #
+        quantity_arr = np.log(quantity_arr)
+        x_mean = np.nanmean((quantity_arr)) #np.log10(mean**2 / np.sqrt(mean**2+sigmaX**2)) #
+        x_std = np.nanstd((quantity_arr)) #np.log10(1. + sigmaX ** 2 / mean **2) #
+        #print(quantity + " mean {:.3g} std {:.3g}".format(x_mean, x_std))
         
     counts, bins = np.histogram(quantity_arr, range=rng, bins=20)
     Ntot = np.sum(counts)
@@ -452,28 +456,30 @@ def plotHistogram(pkl, ax_passed=None, quantity="eta", average_factor=2, use_Mdo
     label = variableToLabel(quantity).replace("\overline","")
     if rescaleMdot and quantity == "Mdot": label = label.replace(' [arb. units]', r'$/\dot{M}_B$')
     if log:
-        label = r"$\log_{\rm 10}($" + label + r"$)$"
+        label = r"$\ln($" + label + r"$)$"
     ax.set_xlabel(label)
 
     # calc mean
     if log:
-        quantity_arr = np.power(10, quantity_arr)
+        quantity_arr = np.exp(quantity_arr)
     mean = np.nanmean(quantity_arr)
     print("mean of " + quantity + " is {:.5g}".format(mean))
-    if 0:
-        if log:
-            mean = np.log10(mean)
-        ax.plot(mean, 0.01, color=color, marker='x', ms=10)
+    if 1:
+        #if log:
+        #    mean = np.log10(mean)
+        #ax.plot(mean, 0.01, color=color, marker='x', ms=10)
+        mean_est = (x_mean + x_std ** 2/ 2.)
+        ax.axvline(mean_est, color=color, alpha=0.5)
 
     # log normal dist
     if log:
-        x_axis = np.logspace(rng[0], rng[1])
+        x_axis = np.logspace(np.log10(np.exp(rng[0])), np.log10(np.exp(rng[1])), 100)
 
         #print(np.power(10,x_mean + x_std**2/2.)) #, 0.03, color=color, marker='.', ms=10)
         #print(x_mean, np.log10(mean**2 / np.sqrt(mean**2+sigmaX**2)))
         #print(x_std, np.log10(1. + sigmaX ** 2 / mean **2))
         #ax.plot(np.log10(x_axis), lognormal(x_axis, x_mean, x_std), color=color)
-        ax.plot(np.log10(x_axis), norm.pdf(np.log10(x_axis), x_mean, x_std), color=color, lw=5, alpha=0.3)
+        ax.plot(np.log(x_axis), norm.pdf(np.log(x_axis), x_mean, x_std), color=color, lw=5, alpha=0.3)
 
     if ax_passed is None:
         fig.tight_layout()
@@ -484,17 +490,19 @@ def plotHistogram(pkl, ax_passed=None, quantity="eta", average_factor=2, use_Mdo
     else:
         return ax
 
-def compareHistogram(a=0.9, quantity="eta"):
+def compareHistogram(a=0.9, quantity="eta", rescaleMdot=True):
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
     if a == 0.9:
         dirtags = [
-            #"101225_n4_a0.9_bondi_nocap_momcons",
+            #"051225_oz_a0.9_bondi_newflr",
+            #"051225_n4_a0.9_bondi_newflr",
+            "101225_n4_a0.9_bondi_nocap_momcons",
             "121325_n4_a0.9_bondi_nocap_momcons",
-            #"092525_a0.9_rB2e3_mom_cons",
-            #"delta/092525_a0.9_rB2e4_mom_cons",
-            #"092525_a0.9_rB2e5_mom_cons_test",
+            "092525_a0.9_rB2e3_mom_cons",
+            "delta/092525_a0.9_rB2e4_mom_cons",
+            "092525_a0.9_rB2e5_mom_cons_test",
             "092525_a0.9_rB2e6_momcons",
                 ]
     elif a == 0.7:
@@ -537,7 +545,7 @@ def compareHistogram(a=0.9, quantity="eta"):
     colors = plt.cm.plasma(np.linspace(0., 1., len(dirtags)))
     for i,dirtag in enumerate(dirtags):
         pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
-        ax = plotHistogram(pkl_name, ax_passed=ax, quantity=quantity, tmax=tmaxs[i], color=colors[i]) #, perzone_avg_frac=0.5)
+        ax = plotHistogram(pkl_name, ax_passed=ax, quantity=quantity, tmax=tmaxs[i], color=colors[i], rescaleMdot=rescaleMdot) #, perzone_avg_frac=0.5)
 
     ax.set_title(r"$a_*=$" + str(a))
 
@@ -550,7 +558,7 @@ def compareHistogram(a=0.9, quantity="eta"):
 def compareHistogramAll():
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
-    fig, ax = plt.subplots(2, 5, figsize=(7*5, 6*2), sharex='row',sharey=True)
+    fig, ax = plt.subplots(2, 5, figsize=(7*5, 6*2), sharex='row',sharey='row')
     plt.subplots_adjust(wspace=0., hspace=0.3)
     ax1d = ax.reshape(-1)
 
@@ -565,7 +573,7 @@ def compareHistogramAll():
         nzeff = D["dump"]["Params"]["Multizone/nzones_eff"]
         iax = np.where(np.array([0.1, 0.3, 0.5, 0.7, 0.9, 0.97])==D["dump"]["a"])[0][0]
         for j, quantity in enumerate(["Mdot","eta"]):
-            if nzeff==4 or nzeff==8: plotHistogram(pkl_name, ax_passed=ax[j,iax], quantity=quantity, tmax=tmaxs[i], color=colors[nzeff-4], label=labels[nzeff-4])
+            if nzeff==4 or nzeff==6 or nzeff==8: plotHistogram(pkl_name, ax_passed=ax[j,iax], quantity=quantity, tmax=tmaxs[i], color=colors[nzeff-4], label=labels[nzeff-4])
     
     panel_label = ['(a)','(b)','(c)','(d)','(e)','(f)','(g)','(h)','(i)','(j)']
     titles = [r'$a_*=0.1$',r'$a_*=0.3$',r'$a_*=0.5$',r'$a_*=0.7$',r'$a_*=0.9$']
@@ -573,8 +581,9 @@ def compareHistogramAll():
         ax1d[i].set_title(titles[i], fontdict={'fontsize': 20})
     for i in range(len(ax1d)):
         ax1d[i].text(0.01, 0.90, panel_label[i], transform=ax1d[i].transAxes)
-    ax1d[0].legend(fontsize=20, loc=9)
-    ax1d[0].set_ylim([0,2.5])
+    ax1d[0].legend(fontsize=20, bbox_to_anchor=(0.05, 0.9), loc='upper left')
+    ax1d[0].set_ylim([0,2.])
+    ax[1,0].set_ylim([0,1.2])
 
     # save
     output = "../plots/compare_histogram_all.png"
@@ -600,6 +609,8 @@ def calcStats(pkl, quantity="eta", average_factor=2, use_Mdot_mean=False, rescal
         elif quantity == "phib":
             radius = rEH
         elif quantity == "eta":
+            radius = rB / 3.
+        elif quantity == "etaB":
             radius = rB / 3.
     if D["times"][-1] < tmax * np.power(rB,3./2.):
         tmax = D["times"][-1] / np.power(rB, 3./2.)
@@ -632,13 +643,13 @@ def calcStats(pkl, quantity="eta", average_factor=2, use_Mdot_mean=False, rescal
     quantity_arr = quantity_arr[i_keep]
     times = times[i_keep]
 
-    quantity_arr = np.log10(quantity_arr)
+    quantity_arr = np.log(quantity_arr)
     quantity_arr = quantity_arr[~np.isnan(quantity_arr)]
     x_mean = np.nanmean(quantity_arr) #np.log10(mean**2 / np.sqrt(mean**2+sigmaX**2)) #
     x_std = np.nanstd(quantity_arr) #np.log10(1. + sigmaX ** 2 / mean **2) #
     return x_mean, x_std, rB, a, quantity_arr
 
-def compareAllStats(quantity, ax_passed=None):
+def compareAllStats(quantity, ax_passed=None, rescaleMdot=True):
     import seaborn as sns
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
@@ -657,17 +668,18 @@ def compareAllStats(quantity, ax_passed=None):
     a_save = []
     for i,dirtag in enumerate(dirtags):
         pkl = "../data_products/" + dirtag + "_profiles_all.pkl"
-        x_mean, x_std, rB, a, quantity_arr = calcStats(pkl, quantity, tmax=tmaxs[i])
+        x_mean, x_std, rB, a, quantity_arr = calcStats(pkl, quantity, tmax=tmaxs[i], rescaleMdot=rescaleMdot)
         color = colors[np.where(np.array([0.1, 0.3, 0.5, 0.7, 0.9, 0.97])==a)[0][0]]
         ax[0].plot(rB, x_mean, color=color, marker='.', ms=20)
         rBarr += [rB]
         mean_save += [x_mean]
-        std_save += [x_std]
+        std_save += [(x_std)]
         a_save += [a]
+        print(quantity + " mean {:.3g} std {:.3g}".format(x_mean, x_std))
         if 0: #a == 0.9 and rB>1e5:
             violinarr += [np.power(10, quantity_arr)]
         #ax[1].plot(rB, np.power(10,x_mean + x_std**2/2.), color=color, marker='.', ms=10)
-        ax[1].plot(rB, x_std, color=color, marker='.', ms=20)
+        ax[1].plot(rB, (x_std), color=color, marker='.', ms=20)
     
     rBlist = np.logspace(2, 7, 10)
     a_save = np.array(a_save)
@@ -691,9 +703,10 @@ def compareAllStats(quantity, ax_passed=None):
     for j in range(2):
         ax[j].set_xscale('log')
     if quantity == "eta": ylabel = "eta"
+    if quantity == "etaB": ylabel = "dot{E}"
     if quantity == "Mdot": ylabel = "dot{M}"
-    ax[0].set_title(rf'$\overline{{\log_{{10}}\{ylabel}}}$')
-    ax[1].set_title(rf'$<\log_{{10}}\{ylabel}>$')
+    ax[0].set_title(rf'$\overline{{\ln\{ylabel}}}$')
+    ax[1].set_title(rf'$<\ln\{ylabel}>$')
 
     if ax_passed is None:
         fig.tight_layout()
@@ -800,6 +813,8 @@ def testCorrelation(pkl, ax_passed=None, quantity="eta", average_factor=2, use_M
             radius = rEH
         elif quantity == "eta":
             radius = rB / 3.
+        elif quantity == "etaB":
+            radius = rB / 3.
     if tmax is not None:
         if D["times"][-1] < tmax * tB:
             tmax = D["times"][-1] / tB
@@ -832,7 +847,7 @@ def testCorrelation(pkl, ax_passed=None, quantity="eta", average_factor=2, use_M
     times = times[i_keep][:,0]
 
     log = False
-    if quantity == "Mdot" or quantity == "eta":
+    if quantity == "Mdot" or quantity == "eta" or quantity == "etaB":
         log = True
     elif quantity == "phib":
         log = True
@@ -862,7 +877,7 @@ def testCorrelation(pkl, ax_passed=None, quantity="eta", average_factor=2, use_M
     corrarr /= np.std(corrarr)
     ax.plot(n, corrarr, color=color)
     ax.axvline(n_corr-1, color=color)
-    xrng = Ntot/2. # 15 #min(100, len(corrarr)//2)
+    xrng = 20 #Ntot/2. # min(100, len(corrarr)//2)
     ax.set_xlim([-xrng,xrng])
         
         
@@ -939,18 +954,19 @@ if __name__ == "__main__":
     dirtag="092525_a0.9_rB2e5_mom_cons_test" #_all" #
     dirtag="092525_a0.9_rB2e6_momcons"
     #dirtag="delta/102825_a0.7_rB2e3_momcons"
-    #dirtag="102125_a0.9_rB2e5_mom_cons_96"
+    dirtag="102125_a0.9_rB2e5_mom_cons_96"
     #dirtag="102925_a0.97_rB2e3"
     #dirtag="111025_a0.9_rB2e3_Btor"
     #dirtag="111725_a0.9_rB2e3_Btor_T+"
     #dirtag="111725_a0.9_rB2e5_mom_cons_rdepgmax"
     #dirtag="120325_a0.9_rB2e5_mom_cons_rdepgmax_uconst"
     #dirtag="110725_a0.7_rB2e6_momcons"
+    dirtag="011226_a0.9_rB2e3_mom_cons_beta100"
     pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
 
     average_factor = 1.25 #1.5  # 2 #
     quantities = ["Mdot", 'eta', 'Omega10', 'phib'] #["Mdot", "eta", "phib"]  # 
-    #plotEvolutionMultipanel(pkl_name, quantities=quantities, average_factor=average_factor, xaxis_t=True) #False)  # 
+    plotEvolutionMultipanel(pkl_name, quantities=quantities, average_factor=average_factor, xaxis_t=True) #False)  # 
     #for q2 in ['Mdot']: #'inv_abs_u^th', 'Omega2', 'Omega5', 'Omega10', 'Omega50', 'phib']:
     #    plotCorrelation(pkl_name, q1='eta', q2=q2) #, last_factor=1.2)
     #plotOmegaEvolution(pkl_name)
@@ -961,6 +977,6 @@ if __name__ == "__main__":
         #compareHistogram(a, "eta")
         #compareHistogram(a, "phib")
     #compareHistogramAll()
-    compareAllStats("Mdot")
+    #compareAllStats("Mdot") #, rescaleMdot=False)
     #plotEvolutionSpin(pkl_name)
-    #testCorrelationAll(quantity="Mdot")
+    #testCorrelationAll(quantity="etaB")

@@ -144,7 +144,7 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
     # list initialization
     avgedProfiles = [[[] for _ in range(num_time_chunk)] for _ in range(n_zones_eff)]  # (n_zones_eff, num_time_chunk) dimension
 
-    if "eta" in quantity or quantity == "u^r" or quantity == "phib":
+    if "eta" in quantity or quantity == "u^r" or quantity == "phib" or "etaB" in quantity:
         avgedProfiles_Mdot, _ = timeAvgPerBin(dictionary, tDivList, binNumList, "Mdot", perzone_avg_frac=perzone_avg_frac)
         i10 = np.argmin(abs(radii - 10))
 
@@ -258,7 +258,6 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
             #rho_save = min(valuesListRho[b][radii < 5 * rB])
             irB = np.argmin(abs(rList[b] - rB))
             rho_save = valuesListRho[b][irB] # the method used in Cho+24
-            print(rho_analytic, valuesListRho[b][-1])
             print("rho_save={:.5g}, factor={:.5g}".format(rho_save, rho_analytic / (Mdot_analytic * rho_save)))
             valuesList[b] *= rho_analytic / (Mdot_analytic * rho_save)
 
@@ -304,7 +303,7 @@ def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2, tmax=None):
     return tDivList, binNumList
 
 
-def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, alpha=1., label=None, linestyle="-", legend=True, print_radius=None):
+def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, alpha=1., label=None, linestyle="-", legend=True, print_radius=None, plot_rmax=None):
     # n_zones_eff = len(profile)
     num_time_chunk = len(profile)
     if colors is None:
@@ -315,7 +314,13 @@ def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, alpha=1., lab
         else:
             label_use = label
         if len(radii[b]) > 0:
-            ax.plot(radii[b], profile[b], color=colors[b], lw=2, label=label_use, ls=linestyle, alpha=alpha)
+            plot_r = radii[b]
+            plot_p = profile[b]
+            if plot_rmax is not None:
+                keep_r = (plot_r < plot_rmax)
+                plot_r = plot_r[keep_r]
+                plot_p = plot_p[keep_r]
+            ax.plot(plot_r, plot_p, color=colors[b], lw=2, label=label_use, ls=linestyle, alpha=alpha)
             if print_radius is not None:
                 i_r = np.argmin(abs(radii[b] - print_radius))
                 print("at r={:.5g}, quantity={:.5g}".format(radii[b][i_r], profile[b][i_r]))
@@ -489,12 +494,23 @@ if __name__ == "__main__":
     #pkl_name = "../data_products/delta/102825_a0.5_rB2e4_momcons_profiles_all.pkl"
     #pkl_name = "../data_products/102925_a0.97_rB2e3_profiles_all.pkl"
     pkl_name = "../data_products/101225_n4_a0.9_bondi_nocap_momcons_profiles_all.pkl"
-    #pkl_name = "../data_products/102125_a0.9_rB2e5_mom_cons_96_profiles_all.pkl"
+    pkl_name = "../data_products/102125_a0.9_rB2e5_mom_cons_96_profiles_all.pkl"
     #pkl_name = "../data_products/103025_a0.9_rB2e5_mom_cons_g43_profiles_all.pkl"
+    #pkl_name = "../data_products/110725_a0.7_rB2e6_momcons_profiles_all.pkl"
     #pkl_name = "../data_products/111725_a0.9_rB2e5_mom_cons_rdepgmax_profiles_all.pkl"
+    #pkl_name = "../data_products/111725_n4_a0.1_bondi_nocap_momcons_profiles_all.pkl"
     #pkl_name = "../data_products/120325_a0.9_rB2e5_mom_cons_rdepgmax_uconst_profiles_all.pkl"
     #pkl_name = "../data_products/120525_a0.9_rB2e5_mom_cons_rdepgmax2_uconst_profiles_all.pkl"
     #pkl_name = "../data_products/121025_a0.9_rB2e5_mom_cons_rdepgmax_full_profiles_all.pkl"
+    #pkl_name = "../data_products/121325_a0.9_rB2e5_mom_cons_rdepgmax2_profiles_all.pkl"
+    #pkl_name = "../data_products/121325_n4_a0.1_bondi_nocap_momcons_profiles_all.pkl"
+    #pkl_name = "../data_products/121925_a0.9_rB2e5_mom_cons_rdepgmax2_vshallow_profiles_all.pkl"
+    #pkl_name = "../data_products/122125_a0.9_rB2e5_mom_cons_rdepgmax3_uconst_profiles_all.pkl"
+    #pkl_name = "../data_products/011226_a0.9_rB2e3_mom_cons_beta100_profiles_all.pkl"
+    pkl_name = "../data_products/012026_a0_rB2e4_momcons_profiles_all.pkl"
+    #pkl_name = "../data_products/012026_a0_rB2e5_mom_cons_test_profiles_all.pkl"
+    #i = 21
+    #pkl_name = "../data_products/"+gdirtags[i]+"_profiles_all.pkl"
 
     plot_dir = "../plots/test"  # common directory
     os.makedirs(plot_dir, exist_ok=True)
@@ -505,7 +521,7 @@ if __name__ == "__main__":
         #"rho",
         #"Mdot",
         #"beta",
-        #"eta",
+        "eta",
         #"T",
         #"eta_Fl",
         #"eta_EM",
@@ -513,7 +529,7 @@ if __name__ == "__main__":
         #"abs_u^r",
         #"Omega",
         #"abs_Omega",
-        "phib",
+        #"phib",
     ]
     print(pkl_name)
     plotProfiles(pkl_name, quantityList, plot_dir=plot_dir, perzone_avg_frac=0.05, num_time_chunk=4, time_bin_factor=2., rescale=True, show_init=True, show_rscale=False, flatten_rho=False, prioritize_inner=False, tmax=700) #, verbose=True) #, use_avged_Mdot=True) #) #, label='__nolegend__',color_list=['g']) #
