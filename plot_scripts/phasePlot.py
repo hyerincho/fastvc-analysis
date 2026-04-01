@@ -3,7 +3,7 @@ from matplotlib_settings import *
 from ylabel_dictionary import *
 
 
-def compare_eta_phib(dirtags, labels=None, colors=None, average_factor=1.2, use_Mdot_mean=True, tmax=None):
+def compare_eta_phib(dirtags, labels=None, colors=None, average_factor=1.2, use_Mdot_mean=True, tmax=None, alpha=1):
     matplotlib_settings()
     plt.rcParams.update({"font.size": 15})
     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
@@ -12,6 +12,7 @@ def compare_eta_phib(dirtags, labels=None, colors=None, average_factor=1.2, use_
     if labels is None:
         labels = dirtags
 
+    a_list = []
     for i, dirtag in enumerate(dirtags):
         pkl = "../data_products/" + dirtag + "_profiles_all.pkl"
         with open(pkl, "rb") as openFile:
@@ -22,18 +23,20 @@ def compare_eta_phib(dirtags, labels=None, colors=None, average_factor=1.2, use_
         eta = extractQuantity(D, "eta", tmax, average_factor, False, use_Mdot_mean)
         phib = extractQuantity(D, "phib", tmax, average_factor, False, use_Mdot_mean)
         a = get_spin(D)
+        a_list += [a]
 
         #ax.plot(phib_mean, eta_mean, marker=".", color=colors[i], label=labels[i])
         #ax.errorbar(np.mean(phib), np.mean(eta), xerr=np.std(phib), yerr=np.std(eta), marker=".", color=colors[i], label=labels[i])
-        ax.scatter(phib, eta, marker=".", color=colors[i], label=labels[i])
+        ax.scatter(phib, eta, marker=".", color=colors[i], label=labels[i], alpha=alpha)
 
     ax.set_xlim([10, 100])
-    ax.set_ylim([1e-2, 5])
+    ax.set_ylim([1e-3, 5])
     ax.set_xscale('log')
     ax.set_yscale('log')
     xlim = ax.get_xlim()
     phib_xaxis = np.linspace(xlim[0], xlim[1], 10)
-    ax.plot(phib_xaxis, eta_BZ6(a, phib_xaxis, 0.05))
+    for i,a in enumerate(a_list):
+        ax.plot(phib_xaxis, eta_BZ6(a, phib_xaxis, 0.05), color=colors[i])
     ax.legend()  # fontsize=7)
     ax.set_xlabel(r"$\phi_b$")
     ax.set_ylabel(r"$\eta$")
@@ -86,20 +89,30 @@ def scatter_q1_q2(dirtag, ax_passed=None, q1='phib', q2='eta', tmax=None, averag
             q1_arr = q1_arr[ind]
             q2_arr = q2_arr[ind]
 
+        # fit
+        if 0:
+            ifit = (~np.isnan(np.log10(q1_arr))) & (~np.isnan(np.log10(q2_arr)))
+            popt, pcov = curve_fit(lin_func, np.log10(q1_arr)[ifit], np.log10(q2_arr)[ifit])
+            print("slope = {:.3g} +- {:.3g} norm {:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(10.,popt[1])))
+            x_arr = np.logspace(np.log10(np.min(q1_arr[ifit])), np.log10(np.max(q1_arr[ifit])))
+            ax.loglog(x_arr, np.power(10,lin_func(np.log10(x_arr), *popt)), color='k', alpha=0.5)
+
     a = get_spin(D)
 
     if (color_eta or color_time) and not use_thinfo_q1:
         if color_eta:
             color = extractQuantity(D, 'eta', tmax, average_factor, False, use_Mdot_mean)
             norm = matplotlib.colors.LogNorm(vmin=1e-2, vmax=10)
+            label = r'$\eta$'
         if color_time:
             color = extractQuantity(D, 'time', tmax, average_factor, False, use_Mdot_mean)
             norm = None
+            label = r'$t [t_B]$'
         if only_use_positive_Omega: color = color[ind]
         sc = ax.scatter(q1_arr, q2_arr, marker=".", c=color, norm=norm)
         if ax_passed is None or show_cbar:
             cbar = plt.colorbar(sc)
-            cbar.set_label(r'$\eta$', rotation=0)
+            cbar.set_label(label, rotation=0)
     else: 
         sc = ax.scatter(q1_arr, q2_arr, marker=".", c='k')
     if show_hist:
@@ -126,10 +139,14 @@ def scatter_q1_q2(dirtag, ax_passed=None, q1='phib', q2='eta', tmax=None, averag
         #ax.set_xscale('log')
     elif q1 == "abs_u^th":
         ax.set_xlim([2.5e-3, 1.5e-2])
+    elif q1 == "s" or q1 == "s_EM":
+        ax.set_xlim([-20, 2])
     if q2 == "eta":
         ax.set_ylim([1e-2, 10])
     elif q2 == "phib":
         ax.set_ylim([10, 100])
+    elif q2 == "s" or q2 == "s_EM":
+        ax.set_ylim([-20, 2])
     if logx: ax.set_xscale('log')
     else: ax.axvline(0, color='k', ls=':')
     if logy: ax.set_yscale('log')
@@ -138,6 +155,10 @@ def scatter_q1_q2(dirtag, ax_passed=None, q1='phib', q2='eta', tmax=None, averag
         phib_xaxis = np.linspace(xlim[0], xlim[1], 10)
         ax.plot(phib_xaxis, eta_BZ6(a, phib_xaxis, 0.05))
     ax.set_xlabel(variableToLabel(q1))
+
+    if q1 == "s" and q2 == "s_EM":
+        s_arr = np.linspace(-20,2)
+        ax.plot(s_arr, s_arr, 'k:')
     if ax_passed is None:
         ax.set_ylabel(variableToLabel(q2))
         fig.suptitle(dirtag)
@@ -256,43 +277,27 @@ def compare_kappa(dirtags):
 
 
 if __name__ == "__main__":
-    dirtags = ["032125_torus_tegan", "032425_torus", "032525_torus_safe_floors_normal", "032625_torus_safe_floors2", "032725_torus_safe_floors3", "032825_torus_safe_floors4", "032825_torus_safe_floors_nofofc_sigmamax", "040125_torus_reconnect_sigma", "040225_torus_reconnect_sigma_Tmax", "040325_torus_noehbuffer"]
-    dirtags = ["031125_a0.9_cap_correctly", "032125_n4a0.9_toriilike", "042125_n4_a0.9_bondi_jks2", "041625_n4_a0.9_toriilike_jks2_smth2_reconnect"]
     dirtags = [
-        #"delta/030525_a0.9_oz",
-        #"042125_a0.9_oz_jks",
-        #"031125_a0.9_cap_correctly",
-        #"042125_n4_a0.9_bondi_jks2",
-        #"delta/032025_a0.9_oz_clearangle",
-        #"032125_n4a0.9_toriilike",
-        #"041625_n4_a0.9_toriilike_jks2_smth2_reconnect",
-        #"042225_n4_a0.9_retrograde",
-        #"040325_n4_a0.9_torrilike_nocap",
-        #"042325_a0.9_rB2e3_bondi",
-        #"042325_a0.9_rB2e5_bondi",
-        #"041825_a0.9_rB2e5_jks2_smth2",
-        #"043025_n4_a0.9_bondi_rot+",
-        #"043025_n4_a0.9_bondi_rot-",
-        #"042225_n4_a0.9_bondi_jks2_clearangle",
-        #"042825_a0.9_rB2e4_bondi_rot",
-        # "042325_n4_a0.9_tl_uphi0",
-        # "042225_n4_a0.9_toriilike_jks2_nocap",
-        #"042225_n4_a0.9_bondi_jks2_nocap"
-        #"043025_a0.9_rB2e3_bondi_eks"
-        #"030725_a0.9_safe_longtin20"
-        #"051225_oz_a0.9_toriilike_newflr"
-        "092525_a0.9_rB2e5_mom_cons_test"
+        "012026_a0_rB2e5_mom_cons_test",
+        "delta/092425_a0.1_rB2e5_momcons",
+        "delta/092425_a0.3_rB2e5_momcons",
+        "delta/092425_a0.5_rB2e5_momcons",
+        "delta/092425_a0.7_rB2e5_momcons",
+        "092525_a0.9_rB2e5_mom_cons_test",
     ]
-    labels = ['bondi'] #["oz", "oz_jks", "mz", "mz_jks", "oz_tl", "mz_tl", "mz_tl_jks", "mz_tl_-.9", "mz_tl_nocap", "2e3", "2e5", "+", "-"]  # "mz_tl_0","mz_jks_ca", 
+    labels = ['0','0.1','0.3','0.5', '0.7','0.9'] #["oz", "oz_jks", "mz", "mz_jks", "oz_tl", "mz_tl", "mz_tl_jks", "mz_tl_-.9", "mz_tl_nocap", "2e3", "2e5", "+", "-"]  # "mz_tl_0","mz_jks_ca", 
     colors = ["black", "tab:blue", "c", "g", "r", "tab:orange", "m", "y", "pink", "peru", "orange", "r", 'm']  # colors for each runs #"gray", 
-    compare_eta_phib(dirtags, labels, colors, 2., use_Mdot_mean=False)  # 1.1)
-    dirtag="051225_oz_a0.9_bondi_newflr" #"052825_a0.9_rB2e5_bondi_eks_largerout" #"051225_n4_a0.9_bondi_newflr" #"051225_n4_a0.9_bondi_nocap_newflr" #"052825_n4_a-0.9_torilike_nocap_newflr" #"043025_a0.9_rB2e5_bondi_eks" #"051225_n4_a-0.9_toriilike_eks" #"041825_a0.9_rB2e5_jks2_smth2" #"042325_a0.9_rB2e5_bondi" #"042225_n4_a0.9_toriilike_jks2_nocap" #"042225_n4_a0.9_retrograde" #"042125_n4_a0.9_bondi_jks2" #"delta/030525_a0.9_oz" #"041625_n4_a0.9_toriilike_jks2_smth2_reconnect" #
+    colors = ['lightgreen'] + list(plt.cm.gnuplot(np.linspace(0.9, 0., 5)))
+    compare_eta_phib(dirtags, labels, colors, 2., use_Mdot_mean=False, tmax=700, alpha=0.5)  # 1.1)
+    dirtag="092525_a0.9_rB2e5_mom_cons_test"
     #scatter_q1_q2(dirtag, q1='abs_u^th', q2='phib', average_factor=2, use_Mdot_mean=False, color_eta=True, logx=True, logy=True, only_use_positive_Omega=True)
     #scatter_q1_q2(dirtag, q1='abs_u^phi', q2='phib', average_factor=2, use_Mdot_mean=False, color_eta=True, logx=True, logy=True)
     #scatter_q1_q2(dirtag, q1='u^th', q2='eta', average_factor=2, use_Mdot_mean=False, color_eta=True, logx=False, logy=True, use_thinfo_q1=True, only_use_positive_Omega=True)
+    #scatter_q1_q2(dirtag, q1='s', q2='s_EM', average_factor=2, use_Mdot_mean=False, color_eta=True, logx=False, logy=False)
     #scatter_q_complex(dirtag, q='u^th', color_eta=True)
     #scatter_q1_q2(dirtag, q1='u^phi', q2='phib', average_factor=2, use_Mdot_mean=False, color_eta=True, logx=False, logy=True)
-    #scatter_Omega_q2(dirtag, "eta", 50, 1e5, use_Mdot_mean=False, color_eta=False, color_time=True, use_midplane_Omega=False, for_paper=True) #, show_hist=True)
+    #scatter_Omega_q2(dirtag, "eta", 50, 1.5, use_Mdot_mean=False, color_eta=False, color_time=True, use_midplane_Omega=False, for_paper=True) #, show_hist=True)
+    #scatter_Omega_q2(dirtag, "eta", 700, 2, use_Mdot_mean=False, color_eta=False, color_time=True, use_midplane_Omega=False, for_paper=True) #, show_hist=True)
     #scatter_Omega_q2(dirtag, "phib", 2, use_Mdot_mean=False, color_eta=True)
     # compare_kappa(dirtags)
 

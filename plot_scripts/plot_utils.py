@@ -17,6 +17,12 @@ c = const.c
 G = const.G
 
 gdirtags = [
+    "012026_n4_a0_bondi_nocap_momcons",
+    "012026_a0_rB2e3_momcons",
+    "012026_a0_rB2e4_momcons",
+    "012026_a0_rB2e5_mom_cons_test",
+    "012026_a0_rB2e6_momcons",
+    #"012026_a0_rB2e7_momcons",
     "121325_n4_a0.1_bondi_nocap_momcons",
     "121325_n4_a0.3_bondi_nocap_momcons",
     "121325_n4_a0.5_bondi_nocap_momcons",
@@ -51,11 +57,11 @@ def lin_func(x, a, b):
 
 def rg2pc(r,M=6.5e9*u.Msun):
     rg = G*M/c**2
-    return (r*rg).to('pc').value
+    return (np.array(r)*rg).to('pc').value
 
 def pc2rg(R,M=6.5e9*u.Msun):
     rg = G*M/c**2
-    return (R*u.pc/rg).to('')
+    return (np.array(R)*u.pc/rg).to('')
 
 def calc_rEH(a):
     return 1.0 + np.sqrt(1.0 - a**2)
@@ -134,6 +140,17 @@ def phi_dispersion(dump,quantity):
   if dump['n3']>1:
     return np.std(to_average, axis=2)
 
+def get_lcorr(quantity_arr):
+    mean = np.mean(quantity_arr)
+    corrarr = np.correlate(quantity_arr-mean,quantity_arr-mean,'same')
+    n = np.linspace(0,len(corrarr)-1,len(corrarr))
+    n -= n[len(n)//2]
+    i_search = abs(n)<4
+    n_search = n[i_search]
+    corr_search = corrarr[i_search]
+    n_corr = abs(n_search[np.argmin(np.abs(corr_search - np.max(corr_search)/2.))]) + 1
+    return n_corr
+
 def readQuantity(dictionary, quantity):
     invert = False
     if quantity == "beta":
@@ -173,8 +190,12 @@ def readQuantity(dictionary, quantity):
         #    if zone != 0 and i > dictionary["zones"][0]:
         #        pdb.set_trace()
         #        print(i, np.argwhere(np.array(dictionary["zones"])[:i] == 0)[-1,0])
-
         profiles = [(np.array(list[quantity_index2]) - np.array(list[quantity_index])) / np.array(list[quantity_index2])[i5] for list in dictionary["profiles"]]
+    elif quantity == "eta_EM":
+        quantity_index = dictionary["quantities"].index("Edot_EM")
+        quantity_index2 = dictionary["quantities"].index("Mdot")
+        i5 = np.argmin(abs(dictionary["radii"] - 5))
+        profiles = [- (np.array(list[quantity_index])) / np.array(list[quantity_index2])[i5] for list in dictionary["profiles"]]
     elif quantity == "phib":
         quantity_index = dictionary["quantities"].index("Phib")
         quantity_index2 = dictionary["quantities"].index("Mdot")
@@ -183,6 +204,27 @@ def readQuantity(dictionary, quantity):
         zones = np.array(dictionary["zones"])
         Mdot_normalize = [Mdot_normalize[np.argwhere(zones[:i] == 0)[-1,0]] if zones[i]!=0 and i > zones[0] else Mdot_normalize[i] for i in range(len(Mdot_normalize))]
         profiles = [np.array(list[quantity_index]) / np.sqrt(np.array(list[quantity_index2])[i5]) for list in dictionary["profiles"]]
+    elif quantity == "norm_Edot":
+        quantity_index = dictionary["quantities"].index("Edot")
+        quantity_index2 = dictionary["quantities"].index("Mdot")
+        i5 = np.argmin(abs(dictionary["radii"] - 5))
+        profiles = [(np.array(list[quantity_index])) / np.array(list[quantity_index2])[i5] for list in dictionary["profiles"]]
+    elif quantity == "norm_Ldot":
+        quantity_index = dictionary["quantities"].index("Ldot")
+        quantity_index2 = dictionary["quantities"].index("Mdot")
+        i5 = np.argmin(abs(dictionary["radii"] - 5))
+        #profiles = [(-np.array(list[quantity_index])) / np.array(list[quantity_index2])[i5] for list in dictionary["profiles"]]
+        profiles = [-(np.array(list[quantity_index])) / np.array(list[quantity_index2])[i5] for list in dictionary["profiles"]]
+    elif quantity == "eta_KE":
+        quantity_index = dictionary["quantities"].index("Edot_KE")
+        quantity_index2 = dictionary["quantities"].index("Mdot")
+        i5 = np.argmin(abs(dictionary["radii"] - 5))
+        profiles = [(- np.array(list[quantity_index])) / np.array(list[quantity_index2])[i5] for list in dictionary["profiles"]]
+    elif quantity == "eta_TE":
+        quantity_index = dictionary["quantities"].index("Edot_TE")
+        quantity_index2 = dictionary["quantities"].index("Mdot")
+        i5 = np.argmin(abs(dictionary["radii"] - 5))
+        profiles = [(- np.array(list[quantity_index])) / np.array(list[quantity_index2])[i5] for list in dictionary["profiles"]]
     else:
         # just reading the pre-calculated quantities
         quantity_index = dictionary["quantities"].index(quantity)
@@ -204,7 +246,8 @@ def readTimeSeries(D, quantity, radius=100, tmax=None):
         times = np.array(times)
         r_sonic = D["dump"]["rs"]
         mdot = D["dump"]["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = D["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         tB = np.power(rB, 3./2)
         if times[-1] <= tmax * tB:
             print("the time series not reached tmax of {:.3g} yet".format(tmax * tB))
@@ -214,7 +257,7 @@ def readTimeSeries(D, quantity, radius=100, tmax=None):
 def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescale=False, tmax=None, radius=None):
     from plotProfiles import setTimeBins, get_mask, calcFinalTimeAvg, plotProfileQuantity
     store_Mdot10 = False
-    if quantity == "eta" or quantity == "phib" or quantity == "eta_EM":
+    if quantity == "eta" or quantity == "phib" or quantity == "eta_EM" or quantity == "s_EM":
         store_Mdot10 = True
 
     # set radius
@@ -249,6 +292,11 @@ def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescal
     elif "Omega" in quantity:
         quantity_arr, times = readTimeSeries(D, "Omega", radius, tmax)
         quantity_arr *= np.power(radius, 3.0 / 2)
+    elif quantity == "s":
+        quantity_arr, times = readTimeSeries(D, "norm_Edot", radius, tmax)
+        quantity_arr2, _ = readTimeSeries(D, "norm_Ldot", radius, tmax)
+    elif quantity == "s_EM":
+        quantity_arr, times = readTimeSeries(D, "Edot_EM", radius, tmax)
     else:
         quantity_arr, times = readTimeSeries(D, quantity, radius, tmax)
 
@@ -259,15 +307,17 @@ def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescal
 
     r_sonic = D["dump"]["rs"]
     mdot = D["dump"]["mdot"]
-    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    gam = D["dump"]["gam"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
     tB = np.power(rB, 3./2)
     if tmax is None: last_time = times[-1]
     else: last_time = tmax * tB
+    a = D["dump"]["a"]
 
-    Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot)[0]
+    Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot, gam=gam)[0]
     if rescale and (quantity == "Mdot" or quantity == "etaB"):
         print("t={:.5g}-{:.5g}".format(last_time/average_factor, last_time))
-        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot)[0]
+        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot, gam=gam)[0]
         rho_save, _ = readTimeSeries(D, "rho", rB, tmax) # Cho+24 method
         #tDivList, binNumList = setTimeBins(D, 1, time_bin_factor=average_factor, tmax=tmax)
         #mask_list = get_mask(D, prioritize_inner=False) #True)
@@ -297,6 +347,13 @@ def processTimeSeries(D, quantity, use_Mdot_mean=True, average_factor=2., rescal
             quantity_arr
     elif quantity == "phib":
         quantity_arr /= np.sqrt(Mdot_save)
+    elif quantity == "s":
+        quantity_arr = quantity_arr2 - 2. * quantity_arr * a
+    elif quantity == "s_EM":
+        rEH = calc_rEH(a)
+        OmegaH = a / (2 * rEH)
+        k = 0.35
+        quantity_arr = quantity_arr / Mdot_save * (1./(k*OmegaH) - 2.* a)
 
     return quantity_arr, times
 
@@ -319,7 +376,8 @@ def extractQuantity(D, quantity, tmax=None, average_factor=2.0, return_mean=True
     # extract steady state of the quantity
     r_sonic = D["dump"]["rs"]
     mdot = D["dump"]["mdot"]
-    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    gam = D["dump"]["gam"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
     tB = np.power(rB, 3./2)
     
     innermost = np.array(D["zones"]) == 0  # <= 1 #

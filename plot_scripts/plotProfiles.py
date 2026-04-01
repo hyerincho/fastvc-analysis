@@ -93,7 +93,6 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
     else:
         switch_list = times
         switch_pt = set(t0_zone)
-    delt = np.gradient(times)
     switch_pt = sorted(switch_pt) + [switch_list[-1]]
 
     # TODO: (07/29/24) do I need dt weight?
@@ -104,17 +103,23 @@ def timeAvgPerBin(dictionary, tDivList, binNumList, quantity, perzone_avg_frac=0
             switch_num = np.argwhere((switch_list[i] > switch_pt[:-1]) & (switch_list[i] <= switch_pt[1:]))
             if len(switch_num) > 1:
                 print("ERROR: can't identify when this output is switched!")
+            elif i == 0: switch_num = 0
             else:
                 switch_num = switch_num[0, 0]
-            #if zone_num == 0: pdb.set_trace()
             if switch_pt[switch_num + 1] - switch_list[i] <= (switch_pt[switch_num + 1] - switch_pt[switch_num]) * perzone_avg_frac:
                 # only when it is last (perzone_avg_frac), stage for averaging
                 sortedProfiles[zone_num][bin_num].append(profile)
-                #deltBin[zone_num][bin_num].append(delt[i])
-                delt = times[i] - times[i-1]
-                if zone_num == 0 and delt > 100: delt = 100 # temporary TODO
-                deltBin[zone_num][bin_num].append(delt)
-
+                #delt = times[i] - times[i-1]
+                #if zone_num == 0 and delt > 100: delt = 100 # temporary TODO
+                #deltBin[zone_num][bin_num].append(delt)
+    if 0:
+        # print Vcycles number
+        iwhere = np.argwhere(np.array(binNumList) == 0)[-1][0]
+        last_ncycle = cycles[iwhere]
+        last_fnum = int(last_ncycle / 8000.)
+        last_Vcycle = last_fnum / (2 * (n_zones_eff - 2) + 11.)
+        print("ncycle={} fnum={} Vcycle={:.5g}".format(last_ncycle, last_fnum, last_Vcycle))
+    
     #if quantity == "eta":
     #    i5 = np.argmin(abs(dictionary["radii"] - 5))
     #    np.save("./plotprofiledat.npy",np.array(sortedProfiles[0][num_time_chunk-1])[:,i5])
@@ -158,7 +163,7 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
             for zone in range(n_zones_eff):
                 if len(avgedProfiles_Edot[zone][b]) > 0:
                     avgedProfiles[zone][b] = (avgedProfiles_Mdot[zone][b] - avgedProfiles_Edot[zone][b]) / Mdot10
-    elif quantity == "eta_Fl":
+    elif use_avged_Mdot and quantity == "eta_Fl":
         avgedProfiles_EdotFl, invert = timeAvgPerBin(dictionary, tDivList, binNumList, "Edot_Fl", perzone_avg_frac=perzone_avg_frac)
         for b in range(num_time_chunk):
             if len(avgedProfiles_Mdot[0][b]) > 0:
@@ -168,7 +173,7 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
             for zone in range(n_zones_eff):
                 if len(avgedProfiles_EdotFl[zone][b]) > 0:
                     avgedProfiles[zone][b] = (avgedProfiles_Mdot[zone][b] - avgedProfiles_EdotFl[zone][b]) / Mdot10
-    elif quantity == "eta_EM":
+    elif use_avged_Mdot and quantity == "eta_EM":
         avgedProfiles_EdotEM, invert = timeAvgPerBin(dictionary, tDivList, binNumList, "Edot_EM", perzone_avg_frac=perzone_avg_frac)
         for b in range(num_time_chunk):
             if len(avgedProfiles_Mdot[0][b]) > 0:
@@ -232,7 +237,7 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
                 if save_rho:
                     values_combined_rho = np.concatenate([values_combined_rho, profile_rho[mask]]) #* (-1) ** int(flip_sign)
         if flatten_rho and quantity == "rho":
-            values_combined *= np.power(r_combined, 1.1)  # just to test Xu+23 rho ~ r^{-0.8}
+            values_combined *= np.power(r_combined, 1.2) #1.1)  # just to test Xu+23 rho ~ r^{-0.8}
         rList[b] = r_combined
         valuesList[b] = values_combined
         if save_rho:
@@ -250,9 +255,10 @@ def calcFinalTimeAvg(dictionary, tDivList, binNumList, quantity, perzone_avg_fra
         # rescale Mdot depending on the density at Bondi radius
         r_sonic = dictionary["dump"]["rs"]
         mdot = dictionary["dump"]["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
-        Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot)[0]
-        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot)[0]
+        gam = dictionary["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
+        Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot, gam=gam)[0]
+        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot, gam=gam)[0]
         for b in range(num_time_chunk):
             # rho_save = min(valuesListRho[b])
             #rho_save = min(valuesListRho[b][radii < 5 * rB])
@@ -280,7 +286,8 @@ def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2, tmax=None):
     if tmax is not None:
         r_sonic = dictionary["dump"]["rs"]
         mdot = dictionary["dump"]["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = dictionary["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         tB = np.power(rB, 3./2)
         if t_last > tmax * tB:
             t_last = tmax * tB
@@ -303,7 +310,7 @@ def setTimeBins(dictionary, num_time_chunk=4, time_bin_factor=2, tmax=None):
     return tDivList, binNumList
 
 
-def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, alpha=1., label=None, linestyle="-", legend=True, print_radius=None, plot_rmax=None):
+def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, alpha=1., label=None, linestyle="-", legend=True, print_radius=None, plot_rmax=None, plot_rmin=None):
     # n_zones_eff = len(profile)
     num_time_chunk = len(profile)
     if colors is None:
@@ -318,6 +325,10 @@ def plotProfileQuantity(ax, radii, profile, tDivList, colors=None, alpha=1., lab
             plot_p = profile[b]
             if plot_rmax is not None:
                 keep_r = (plot_r < plot_rmax)
+                plot_r = plot_r[keep_r]
+                plot_p = plot_p[keep_r]
+            if plot_rmin is not None:
+                keep_r = (plot_r > plot_rmin)
                 plot_r = plot_r[keep_r]
                 plot_p = plot_p[keep_r]
             ax.plot(plot_r, plot_p, color=colors[b], lw=2, label=label_use, ls=linestyle, alpha=alpha)
@@ -398,7 +409,8 @@ def plotProfiles(
         rEH = 1.0 + np.sqrt(1.0 - a**2)
     r_sonic = D["dump"]["rs"]
     mdot = D["dump"]["mdot"]
-    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    gam = D["dump"]["gam"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
 
     for i, quantity in enumerate(quantity_list):
         if fig_ax is None:
@@ -472,43 +484,20 @@ def plotProfiles(
 if __name__ == "__main__":
     pkl_name = "../data_products/041625_n4_a0.9_toriilike_jks2_smth2_reconnect_profiles_all.pkl"
     pkl_name = "../data_products/041825_a0.9_rB2e5_jks2_smth2_profiles_all.pkl"
-    pkl_name = "../data_products/042225_n4_a0.9_bondi_jks2_nocap_profiles_all.pkl"
-    pkl_name = "../data_products/042325_a0.9_rB2e5_bondi_profiles_all.pkl"
-    pkl_name = "../data_products/043025_a0.9_rB2e3_bondi_eks_profiles_all.pkl"
-    pkl_name = "../data_products/051225_oz_a0.9_toriilike_newflr_profiles_all.pkl"
-    #pkl_name = "../data_products/delta/051325_a0.9_rB2e5_bondi_eks_profiles_all.pkl"
-    pkl_name = "../data_products/052825_a0.9_rB2e5_bondi_eks_largerout_profiles_all.pkl"
-    #pkl_name = "../data_products/052925_a0.0_rB2e5_eks_largerout_profiles_all.pkl"
-    #pkl_name = "../data_products/080425_a0.9_rB2e5_mixedinverter_profiles_all.pkl"
-    #pkl_name = "../data_products/080425_a0.9_rB2e5_fafout_profiles_all.pkl"
-    #pkl_name = "../data_products/080625_a0.9_rB2e6_profiles_all.pkl"
-    pkl_name = "../data_products/080625_a0.9_rB2e5_96_profiles_all.pkl"
-    pkl_name = "../data_products/091125_a0.9_rB2e5_rdepgmax5_profiles_all.pkl"
-    #pkl_name = "../data_products/091525_a0.9_rB2e5_normal-recovery_profiles_all.pkl"
-    #pkl_name = "../data_products/092525_a0.9_rB2e4_fafout_profiles_all.pkl"
-    pkl_name = "../data_products/092525_a0.9_rB2e3_mom_cons_profiles_all.pkl"
-    #pkl_name = "../data_products/092525_a0.9_rB2e5_mom_cons_test_profiles_all.pkl"
-    #pkl_name = "../data_products/delta/092525_a0.9_rB2e4_mom_cons_profiles_all.pkl"
     pkl_name = "../data_products/092525_a0.9_rB2e6_momcons_profiles_all.pkl"
-    #pkl_name = "../data_products/delta/092425_a0.7_rB2e5_momcons_profiles_all.pkl"
-    #pkl_name = "../data_products/delta/102825_a0.5_rB2e4_momcons_profiles_all.pkl"
-    #pkl_name = "../data_products/102925_a0.97_rB2e3_profiles_all.pkl"
-    pkl_name = "../data_products/101225_n4_a0.9_bondi_nocap_momcons_profiles_all.pkl"
-    pkl_name = "../data_products/102125_a0.9_rB2e5_mom_cons_96_profiles_all.pkl"
-    #pkl_name = "../data_products/103025_a0.9_rB2e5_mom_cons_g43_profiles_all.pkl"
+    pkl_name = "../data_products/092525_a0.9_rB2e5_mom_cons_test_profiles_all.pkl"
+    #pkl_name = "../data_products/092525_a0.9_rB2e3_mom_cons_profiles_all.pkl"
+    #pkl_name = "../data_products/102125_a0.9_rB2e5_mom_cons_96_profiles_all.pkl"
+    #pkl_name = "../data_products/102525_a0.9_rB2e3_mom_cons_g43_profiles_all.pkl"
+    pkl_name = "../data_products/103025_a0.9_rB2e5_mom_cons_g43_profiles_all.pkl"
     #pkl_name = "../data_products/110725_a0.7_rB2e6_momcons_profiles_all.pkl"
-    #pkl_name = "../data_products/111725_a0.9_rB2e5_mom_cons_rdepgmax_profiles_all.pkl"
-    #pkl_name = "../data_products/111725_n4_a0.1_bondi_nocap_momcons_profiles_all.pkl"
-    #pkl_name = "../data_products/120325_a0.9_rB2e5_mom_cons_rdepgmax_uconst_profiles_all.pkl"
-    #pkl_name = "../data_products/120525_a0.9_rB2e5_mom_cons_rdepgmax2_uconst_profiles_all.pkl"
-    #pkl_name = "../data_products/121025_a0.9_rB2e5_mom_cons_rdepgmax_full_profiles_all.pkl"
-    #pkl_name = "../data_products/121325_a0.9_rB2e5_mom_cons_rdepgmax2_profiles_all.pkl"
-    #pkl_name = "../data_products/121325_n4_a0.1_bondi_nocap_momcons_profiles_all.pkl"
-    #pkl_name = "../data_products/121925_a0.9_rB2e5_mom_cons_rdepgmax2_vshallow_profiles_all.pkl"
-    #pkl_name = "../data_products/122125_a0.9_rB2e5_mom_cons_rdepgmax3_uconst_profiles_all.pkl"
     #pkl_name = "../data_products/011226_a0.9_rB2e3_mom_cons_beta100_profiles_all.pkl"
-    pkl_name = "../data_products/012026_a0_rB2e4_momcons_profiles_all.pkl"
-    #pkl_name = "../data_products/012026_a0_rB2e5_mom_cons_test_profiles_all.pkl"
+    #pkl_name = "../data_products/012026_a0_rB2e6_momcons_profiles_all.pkl"
+    #pkl_name = "../data_products/012726_a0.9_rB2e5_beta100_profiles_all.pkl"
+    #pkl_name = "../data_products/020126_a0.5_rB2e5_beta100_profiles_all.pkl"
+    #pkl_name = "../data_products/020825_n4_a0.5_bondi_nocap_momcons_profiles_all.pkl"
+    #pkl_name = "../data_products/022326_a0.9_rB2e5_extg_profiles_all.pkl"
+    #pkl_name = "../data_products/031126_a0.9_rB2e5_extg_nocap_profiles_all.pkl"
     #i = 21
     #pkl_name = "../data_products/"+gdirtags[i]+"_profiles_all.pkl"
 
@@ -518,10 +507,11 @@ if __name__ == "__main__":
     # os.makedirs(plot_dir, exist_ok=True)
 
     quantityList = [
-        #"rho",
-        #"Mdot",
+        "rho",
+        "Mdot",
         #"beta",
-        "eta",
+        #"eta",
+        #"Ldot"
         #"T",
         #"eta_Fl",
         #"eta_EM",

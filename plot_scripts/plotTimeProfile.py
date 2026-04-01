@@ -109,7 +109,7 @@ def plotTimeProfilesFromDump(dirtag, quantity, fnum, nfiles=1):
     xlim = (dump["r_eh"], ax.get_xlim()[-1])
     ax.set_xlim(xlim)
     if "eta" in quantity and quantity != "beta" and quantity != "etaMdot":
-        ax.set_ylim([1e-3, 4])
+        ax.set_ylim([4e-3, 4])
     elif quantity == "beta":
         ax.set_ylim([1e-3, 10])
     elif quantity == "phib":
@@ -141,7 +141,8 @@ def plotCompareEtaFromDump():
         dump = pyharm.load_dump(fname, ghost_zones=False)
         r_sonic = dump["rs"]
         mdot = dump["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = dump["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         tB = np.power(rB, 3./2)
         print(dump["n_step"], dump["t"]/tB)
 
@@ -180,18 +181,17 @@ def plotCompareEtaFromDump():
 if __name__ == "__main__":
     dirtag = "051225_oz_a0.9_toriilike_newflr"
     #dirtag = "052825_a0.9_rB2e5_bondi_eks_largerout"
-    #dirtag = "073125_a0.9_rB2e5_drift_bsqoveru100" #diffbetaflr"
-    #dirtag = "080425_a0.9_rB2e5_sigma10"
-    #dirtag = "080425_a0.9_rB2e5_avgneighbor"
     dirtag = "092525_a0.9_rB2e5_mom_cons_test"
+    dirtag = "092525_a0.9_rB2e6_momcons"
     #dirtag = "111725_a0.9_rB2e5_mom_cons_rdepgmax"
-    #dirtag = "120325_a0.9_rB2e5_mom_cons_rdepgmax_uconst"
-    dirtag="120525_a0.9_rB2e5_mom_cons_rdepgmax3_uconst"
-    #dirtag="121025_a0.9_rB2e5_mom_cons_rdepgmax4"
-    #dirtag="121025_a0.9_rB2e5_mom_cons_rdepgmax_full"
+    #dirtag="120525_a0.9_rB2e5_mom_cons_rdepgmax_tests"
+    #dirtag="121325_a0.9_rB2e5_mom_cons_rdepgmax2"
+    #dirtag="121925_a0.9_rB2e5_mom_cons_rdepgmax2_vshallow"
+    #dirtag="122125_a0.9_rB2e5_mom_cons_rdepgmax3_uconst"
+    #dirtag="121325_n4_a0.9_bondi_nocap_momcons"
     pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
     #plotSingleTimeProfile(pkl_name, 'etaMdot', fnum=16, nfiles=4)
-    plotTimeProfilesFromDump(dirtag, 'eta', fnum=38, nfiles=4)
+    plotTimeProfilesFromDump(dirtag, 'eta_TE', fnum=4020, nfiles=10) # 80
     #plotCompareEtaFromDump()
     #plotTimeProfilesFromDump(dirtag, 'eta', fnum=580, nfiles=10)
     #plotTimeProfilesFromDump(dirtag, 'eta', fnum=830, nfiles=7)

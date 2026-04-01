@@ -1,7 +1,7 @@
 from astropy import units as u
 from astropy import constants as const
 from plot_utils import *
-from plotEvolution import plotEvolution
+from plotEvolution import plotEvolution, plotHistogram
 from plotCompare import compareRuns
 from plotProfiles import setTimeBins, get_mask, calcFinalTimeAvg, plotProfileQuantity
 
@@ -146,7 +146,8 @@ def compare_evolution_rB(a=0.9,show_tl=False):
             D = pickle.load(openFile)
         r_sonic = D["dump"]["rs"]
         mdot = D["dump"]["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = D["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         for j, quantity in enumerate(quantities):
             #if quantity == "eta": radius = rB
             #else: radius = None
@@ -159,7 +160,8 @@ def compare_evolution_rB(a=0.9,show_tl=False):
             D = pickle.load(openFile)
         r_sonic = D["dump"]["rs"]
         mdot = D["dump"]["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = D["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         for j, quantity in enumerate(['eta', 'phib']):
             plotEvolution(pkl, ax_passed=ax[j+1], quantity=quantity, average_factor=avf, xaxis_t=True, scale_tB=True, color='b', alpha=0.2, rescaleMdot=True, tmax=100, show_avg=True, show_negative=False, label='2e5T+', perzone_avg_frac=pzaf, only_selectively_show=True, take_mean=True, radius=None)
 
@@ -184,7 +186,7 @@ def compare_quantity_rB():
 
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
-    quantities = ["Mdot", "eta", "etaMdot"] #, "phib"]
+    quantities = ["Mdot", "etaMdot", "eta"] #, "phib"]
     figsize = (9, 4 * (len(quantities)))
     fig, ax = plt.subplots(len(quantities), 1, figsize=figsize, sharex=True) #, sharey=True)
     if len(quantities) == 1: ax = [ax]
@@ -210,14 +212,16 @@ def compare_quantity_rB():
         perzone_avg_frac = 0.5
     else:
         dirtags = gdirtags
-        ncorr_Mdot = np.array([3,2,2,3,3,2,2,2,2,2,2,1,2,2,2,2,3,3,4,4,3,4,4,4,4,4]) # TODO recieve this value
-        ncorr_eta = np.array([2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,2,4,4,3,3])
-        ncorr_etaB = np.array([3,2,2,2,2,3,2,2,2,2,2,2,2,2,2,2,2,4,4,3,3,4,4,4,4,4])
+        #ncorr_Mdot = np.array([3,2,2,3,3,2,2,2,2,2,2,1,2,2,2,2,3,3,4,4,3,4,4,4,4,4]) # TODO recieve this value
+        #ncorr_eta = np.array([2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,2,4,4,3,3])
+        #ncorr_etaB = np.array([3,2,2,2,2,3,2,2,2,2,2,2,2,2,2,2,2,4,4,3,3,4,4,4,4,4])
         tmaxs = [700] * (len(dirtags))
+        tmaxs[4] = 500 # exception
         #colors = ['r'] + ['k'] * 4 + list(plt.cm.gnuplot(np.linspace(0.9, 0.2, len(dirtags)-4))) # + ['k']
-        colors = list(plt.cm.gnuplot(np.linspace(0.9, 0., 5))) + ['gray']
+        colors = list(plt.cm.gnuplot(np.linspace(0.9, 0., 5))) + ['gray', 'lightgreen']
         time_bin_factor = 2.
         perzone_avg_frac = 0.05
+        labels = [r"$0.1$", r"$0.3$", r"$0.5$", r"$0.7$", r"$0.9$", r"$0.97$", r"$0$"]
     
     mdot_save = []
     eta_save = []
@@ -233,15 +237,18 @@ def compare_quantity_rB():
         mask_list = get_mask(D, prioritize_inner=False) #True)
         r_sonic = D["dump"]["rs"]
         mdot = D["dump"]["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = D["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         rEH = D["dump"]["r_eh"]
-        rB_save += [rB]
-        a_save += [D["dump"]["a"]]
+        nzeff = D["dump"]["Params"]["Multizone/nzones_eff"]
+        a = D["dump"]["a"]
+        rB_save += [rB]#if nzeff > 5: 
+        a_save += [a]  #if nzeff > 5: 
         for j, quantity in enumerate(quantities):
             if 1: #quantity != "etaMdot":
                 radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac, mask_list=mask_list, rescale=True, use_avged_Mdot=cho2025fig)
                 if quantity == "Mdot":
-                    r_read = rEH
+                    r_read = 5 #rEH #
                 elif quantity == "phib":
                     r_read = rEH
                 elif quantity == "eta":
@@ -256,41 +263,56 @@ def compare_quantity_rB():
                 if cho2025fig:
                     color=colors[i]
                 else:
-                    color = colors[np.where(np.array([0.1, 0.3, 0.5, 0.7, 0.9, 0.97])==D["dump"]["a"])[0][0]]
+                    a_ind = np.where(np.array([0.1, 0.3, 0.5, 0.7, 0.9, 0.97, 0])==a)[0][0]
+                    color = colors[a_ind]
                 mfc = color
                 if cho2025fig and (i == 0 or i == len(dirtags) - 1): mfc = 'none'
                 if quantity == "Mdot": 
+                    #if nzeff > 5: 
                     mdot_save += [q_out]
-                    ncorr = ncorr_Mdot[i]
+                    #ncorr_c = ncorr_Mdot[i]
                 elif quantity == "eta": 
+                    #if nzeff > 5: 
                     eta_save += [q_out]
-                    ncorr = ncorr_eta[i]
+                    #ncorr_c = ncorr_eta[i]
                 elif quantity == "etaMdot": 
+                    #if nzeff > 5: 
                     etaB_save += [q_out]
-                    ncorr = ncorr_etaB[i]
+                    #ncorr_c = ncorr_etaB[i]
                 if cho2025fig:
                     ax[j].plot(rB, q_out, color=color, marker='.', ms=20, markerfacecolor=mfc)
                 else:
                     if quantity == "etaMdot": quantity="etaB"
                     x_mean, x_std, _, _, quantity_arr = calcStats(pkl_name, quantity, average_factor=time_bin_factor, use_Mdot_mean=cho2025fig, rescaleMdot=True, tmax=tmaxs[i], perzone_avg_frac=perzone_avg_frac, radius=r_read, verbose=False)
                     mean_est = np.exp(x_mean + x_std ** 2 / 2.)
+                    ncorr = get_lcorr(quantity_arr)
+                    #if ncorr != ncorr_c:
+                    #    print("WARNING! DIFFERENT NCORR {} {}".format(ncorr,ncorr_c))
                     #if quantity == "etaB": 
                     #    ncorr = ncorr_etaB[i]
                     #    etaB_save += [mean_est]
                     #else:
                     if 1:
-                        if abs((np.mean(np.exp(quantity_arr)) - q_out) / q_out) > 1e-1:
+                        if abs((np.mean((quantity_arr)) - q_out) / q_out) > 1e-1:
                             pdb.set_trace()
-                        ax[j].plot(rB, q_out, color=color, marker='.', ms=10, markerfacecolor=mfc)
+                        label = labels[a_ind]
+                        labels[a_ind] = '__nolegend__'
+                        ax[j].plot(rB, q_out, color=color, marker='.', ms=10, markerfacecolor=mfc, label=label, ls='')
                     #print("err {:.5g}, sigma {:.5g}, N {}, ncorr {}".format(x_std / np.sqrt(len(quantity_arr)/ncorr), x_std, len(quantity_arr), ncorr))
                     #ax[j].errorbar(rB, np.log10(q_out), yerr=x_std / np.sqrt(len(quantity_arr)/ncorr), color=color, marker='.', ms=10, markerfacecolor=mfc, capsize=6)
                     Neff = len(quantity_arr) / ncorr
                     cox_err = np.sqrt(x_std ** 2 / Neff + x_std ** 4 / (2. * (Neff - 1.))) # 1.96 for 95%, 1 for 68%
-                    print("mean_est {:.5g} x_std {:.5g} Neff {:.1g} err {:.5g}".format(x_mean + x_std**2/2., x_std, Neff, cox_err))
-                    nzeff = D["dump"]["Params"]["Multizone/nzones_eff"]
+                    print("mean_est {:.5g} x_std {:.5g} Neff {} err {:.5g}".format(x_mean + x_std**2/2., x_std, Neff, cox_err))
                     low = mean_est - np.exp(x_mean + x_std ** 2 / 2. - cox_err)
                     high = np.exp(x_mean + x_std ** 2 / 2. + cox_err) - mean_est
                     ax[j].errorbar(rB, mean_est, yerr=[[low], [high]], color=color, capsize=6)
+                    if quantity == "Mdot" or quantity == "etaMdot":
+                        if quantity == "Mdot": q_est = (-3*a+4.7) * np.power(rB,-0.5)
+                        elif quantity == "etaMdot": q_est = (0.98*a+0.13) * np.power(rB,-0.6)
+                        if (q_out / q_est) > 2:
+                            print("READ!!! a={} R_B={:.2g}: diff is {:.5g}".format(a, rB, q_out/q_est))
+                        elif (q_out / q_est) < 1/2:
+                            print("READ!!! a={} R_B={:.2g}: diff is {:.5g}".format(a, rB, q_est/q_out))
 
     if cho2025fig:
         # Cho+24 scaling
@@ -304,30 +326,42 @@ def compare_quantity_rB():
         mdot_save = np.array(mdot_save)
         eta_save = np.array(eta_save)
         etaB_save = np.array(etaB_save)
-        for a in [0.1, 0.3, 0.5, 0.7, 0.9]:
+        for a in [0, 0.1, 0.3, 0.5, 0.7, 0.9, 0.97]:
             ifit = (a_save == a)
-            color = colors[np.where(np.array([0.1, 0.3, 0.5, 0.7, 0.9, 0.97])==a)[0][0]]
-            popt, pcov = curve_fit(lin_func, np.log10(rB_save[ifit]), np.log10(mdot_save[ifit]))
-            #print("Mdot/MdotB slope = {:.3g} +- {:.3g} norm r={:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(1./np.power(10.,popt[1]), 1/popt[0])))
-            print("Mdot/MdotB slope = {:.3g} +- {:.3g} norm {:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(2e5,popt[0])*np.power(10.,popt[1])))
+            color = colors[np.where(np.array([0.1, 0.3, 0.5, 0.7, 0.9, 0.97,0])==a)[0][0]]
+            if a < 0.95:
+                popt, pcov = curve_fit(lin_func, np.log10(rB_save[ifit]), np.log10(mdot_save[ifit]))
+                print("Mdot/MdotB slope = {:.3g} +- {:.3g} norm r={:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(1./np.power(10.,popt[1]), 1/popt[0])))
+            #popt, pcov = curve_fit(lambda x, b: lin_func(x, -0.5, b), np.log10(rB_save[ifit]), np.log10(mdot_save[ifit]))
+            #print("Mdot/MdotB slope = {:.3g} +- {:.3g} norm {:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(2e5,popt[0])*np.power(10.,popt[1])))
+            #print("Mdot/MdotB slope = {:.3g} +- {:.3g} norm {:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(10.,popt[1])))
+            #print("Mdot/MdotB norm {:.3g}+={:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0])))
             #if not cho2025fig: ax[0].semilogx(rBlist, lin_func(np.log10(rBlist), *popt), color=color, alpha=0.5)
-            if not cho2025fig: ax[0].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), *popt)), color=color, alpha=0.5)
-            popt, pcov = curve_fit(lin_func, np.log10(rB_save[ifit]), np.log10(eta_save[ifit]))
+            #if not cho2025fig: ax[0].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), *popt)), color=color, alpha=0.5)
+            if not cho2025fig: ax[0].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), a=-0.5, b=np.log10(-3*a+4.7))), color=color, alpha=0.5)
+            #ifit2 = ifit & (rB_save > 1e3)
+            #ax[2].loglog(rB_save[ifit], etaB_save[ifit]/mdot_save[ifit], color=color, marker='.', ms=10, ls='none')
+            if a< 0.95:
+                popt, pcov = curve_fit(lin_func, np.log10(rB_save[ifit]), np.log10(eta_save[ifit]))
+                print("eta slope = {:.3g} +- {:.3g} norm {:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(2e5,popt[0])*np.power(10.,popt[1])))
+            #popt, pcov = curve_fit(lin_func, np.log10(rB_save[ifit]), np.log10((etaB_save/mdot_save)[ifit]))
             #print("eta slope = {:.3g} +- {:.3g} norm r={:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(1./np.power(10.,popt[1]), 1/popt[0])))
-            print("eta slope = {:.3g} +- {:.3g} norm {:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(2e5,popt[0])*np.power(10.,popt[1])))
             #if not cho2025fig: ax[1].semilogx(rBlist, lin_func(np.log10(rBlist), *popt), color=color, alpha=0.5)
-            if not cho2025fig: ax[1].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), *popt)), color=color, alpha=0.5)
+            #if not cho2025fig: ax[2].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), *popt)), color=color, alpha=0.3)
+            #if not cho2025fig: ax[1].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), a=[-0.1,0][a>0.5], b=np.log10(np.power(2e5,[0.1,0][a>0.5])*(0.5*a**2-0.16*a+0.03)))), color=color, alpha=0.5)
             if 1:
                 Efb = etaB_save[ifit] #mdot_save[ifit] * eta_save[ifit] #
-                ax[2].loglog(rB_save[ifit], Efb, color=color, marker='.', ms=10, ls='none')
+                ax[1].loglog(rB_save[ifit], Efb, color=color, marker='.', ms=10, ls='none')
                 #popt, pcov = curve_fit(lin_func, np.log10(rB_save[ifit]), np.log10(Efb))
-                popt, pcov = curve_fit(lambda x, b: lin_func(x, -0.6, b), np.log10(rB_save[ifit]), np.log10(Efb))
+                if a < 0.95:
+                    popt, pcov = curve_fit(lambda x, b: lin_func(x, -0.6, b), np.log10(rB_save[ifit]), np.log10(Efb))
+                    print("Efb norm {:.3g}+-{:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0])))
                 #print("Efb slope = {:.3g} +- {:.3g} norm {:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0]),np.power(10.,popt[1])))
-                print("Efb slope = norm {:.3g}+-{:.3g}".format(popt[0], np.sqrt(np.diag(pcov)[0])))
-                #ax[2].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), *popt)), color=color, alpha=0.5)
-                #ax[2].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), a=-0.6, b=popt[0])), color=color, alpha=0.5)
+                #ax[1].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), *popt)), color=color, alpha=0.5)
+                #ax[1].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), a=-0.7, b=popt[0])), color=color, alpha=0.5)
+                #ax[1].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), a=-0.7, b=np.log10(3.3*a+0.6))), color=color, alpha=0.5)
                 #ax[2].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), a=-0.55, b=np.log10(0.6*a**2+0.5*a+0.06))), color=color, alpha=0.5)
-                ax[2].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), a=-0.6, b=np.log10(a+0.1))), color=color, alpha=0.5)
+                ax[1].loglog(rBlist, np.power(10,lin_func(np.log10(rBlist), a=-0.6, b=np.log10(0.98*a+0.13))), color=color, alpha=0.5)
     
     # Cho+24 a=0 Mdot
     if 0:
@@ -346,11 +380,15 @@ def compare_quantity_rB():
         ax[0].set_yscale('log')
         ax[1].set_yscale('log')
     else:
+        legend = ax[0].legend(fontsize=15,ncol=2, title=r'$a_*$')
+        plt.setp(legend.get_title(),fontsize=20)
+        ax[0].set_xlim([2e2, 4e6])
         ax[0].set_ylim([5e-4, 0.4])
         #ax[0].set_ylim([-3.5, -0.5])
-        ax[1].set_ylim([5e-3, 1])
+        ax[2].set_ylim([5e-3, 1])
         #ax[1].set_ylim([-2.5, 0])
-        ax[2].set_ylim([1e-5, 1e-1])
+        ax[1].set_ylim([1.5e-5, 1e-1])
+        ax[2].set_yscale('log')
     for ax_temp in ax:
         ax_temp.set_xlabel(r'$R_B$ [$r_g$]')
     ax[0].axhline(1, color='k', ls=":")
@@ -361,9 +399,9 @@ def compare_quantity_rB():
         ax[0].set_ylabel(r"$\overline{\dot{M}}(r_H)$ [$\dot{M}_B$]")
         ax[1].set_ylabel(r'$\overline{\eta}(R_B/3)$')
     else:
-        ax[0].set_ylabel(r"$\log_{10}{\overline{\dot{M}}(r_H)}$ [$\dot{M}_B$]")
-        ax[1].set_ylabel(r'$\log_{10}{\overline{\eta}(R_B/3)}$')
-        ax[2].set_ylabel(r'$\dot{E}_{\rm fb}$ [$\dot{M}_B c^2$]')
+        ax[0].set_ylabel(r"${\overline{\dot{M}}}$ [$\dot{M}_B$]")
+        ax[2].set_ylabel(r'${\overline{\eta}}$')
+        ax[1].set_ylabel(r'$\overline{\dot{E}_{\rm fb}}$ [$\dot{M}_B c^2$]')
     # 2nd axis
     if 1:
         secax = ax[0].secondary_xaxis('top', functions=(rB2T, T2rB))
@@ -374,7 +412,7 @@ def compare_quantity_rB():
         secax.set_xlabel(r'$M_{\rm halo}$ [$M_\odot$]')
 
     # save
-    output = "../plots/compare_quantity_rB.png"
+    output = "../plots/compare_quantity_rB.pdf"
     plt.savefig(output, bbox_inches="tight")
     print("saved to " + output)
     plt.close(fig)
@@ -411,7 +449,8 @@ def show_snapshot(fnum):
     print(dump["n_step"])
     r_sonic = dump["rs"]
     mdot = dump["mdot"]
-    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    gam = dump["gam"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
     iwv = dump["Params"]["Multizone/i_within_vcycle"]
     nzeff = dump["Params"]["Multizone/nzones_eff"]
     i_zone = abs(iwv - (nzeff - 1))
@@ -498,7 +537,8 @@ def show_tavged(also_show_rprofile=False):
     dump0 = pyharm.load_dump(files[0], ghost_zones=False)
     r_sonic = dump0["rs"]
     mdot = dump0["mdot"]
-    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    gam = dump0["gam"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
     tB = np.power(rB, 3./2)
     n_zones = dump0["Params"]["Multizone/nzones_eff"]
     switch_on_ncycle = dump0["Params"]["Multizone/ncycle_per_zone"] > 0
@@ -618,7 +658,8 @@ def compare_jet_disk_profile():
     mdot = dump0["mdot"]
     rEH = dump0["r_eh"]
     rout = dump0["r_out"]
-    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    gam = dump0["gam"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
     tB = np.power(rB, 3./2)
     n_zones = dump0["Params"]["Multizone/nzones_eff"]
     switch_on_ncycle = dump0["Params"]["Multizone/ncycle_per_zone"] > 0
@@ -810,7 +851,8 @@ def compare_feedback_a():
         mask_list = get_mask(D, prioritize_inner=False) #True)
         r_sonic = D["dump"]["rs"]
         mdot = D["dump"]["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = D["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         rEH = D["dump"]["r_eh"]
         if D["dump"]["a"] == 0.9: rB_save += [rB]
         for j, quantity in enumerate(quantities):
@@ -859,9 +901,14 @@ def compare_profiles_all(time_bin_factor=2, tmax=700):
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
 
-    fig, ax = plt.subplots(5, 1, figsize=(10*1, 5*5), sharey=True, sharex=True)
+    fig, ax = plt.subplots(2, 3, figsize=(27, 2*5), sharey=True, sharex=True)
     plt.subplots_adjust(wspace=0., hspace=0)
     dirtagList = [
+        "012026_n4_a0_bondi_nocap_momcons",
+        "012026_a0_rB2e3_momcons",
+        "012026_a0_rB2e4_momcons",
+        "012026_a0_rB2e5_mom_cons_test",
+        "012026_a0_rB2e6_momcons",
         "121325_n4_a0.1_bondi_nocap_momcons",
         "121325_n4_a0.3_bondi_nocap_momcons",
         "121325_n4_a0.5_bondi_nocap_momcons",
@@ -890,6 +937,7 @@ def compare_profiles_all(time_bin_factor=2, tmax=700):
             ]
     colors = list(plt.cm.coolwarm(np.linspace(0., 1., 5)))
     #linestyles = [':',(0, (1, 10)),'-.','--','-']
+    ax1d = ax.reshape(-1)
 
     for i, dirtag in enumerate(dirtagList):
         pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
@@ -899,26 +947,50 @@ def compare_profiles_all(time_bin_factor=2, tmax=700):
         tDivList, binNumList = setTimeBins(D, 1, time_bin_factor=time_bin_factor, tmax=tmax)
         mask_list = get_mask(D, prioritize_inner=False) #True)
         dump = D["dump"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=dump["rs"], mdot=dump["mdot"])[0]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=dump["rs"], mdot=dump["mdot"], gam=dump["gam"])[0]
         nzeff = dump["Params"]["Multizone/nzones_eff"]
-        iax = np.where(np.array([0.1, 0.3, 0.5, 0.7, 0.9, 0.97])==dump["a"])[0][0]
+        iax = np.where(np.array([0, 0.1, 0.3, 0.5, 0.7, 0.9, 0.97])==dump["a"])[0][0]
         radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, "eta", perzone_avg_frac=0.05, mask_list=mask_list, rescale=True)
         color = colors[nzeff-4] #iax]
-        label = [r'$R_B=400$',r'$2000$',r'$2\cdot 10^4$',r'$2\cdot 10^5$',r'$2\cdot 10^6$'][nzeff-4]
-        plotProfileQuantity(ax[iax], radii, profiles, tDivList, colors=[color], label=label, linestyle='-', legend=(iax==0), plot_rmax=400*rB)
+        if iax == 0: label = [r'$400$',r'$2\cdot 10^3$',r'$2\cdot 10^4$',r'$2\cdot 10^5$',r'$2\cdot 10^6$'][nzeff-4]
+        else: label='__nolegend__'
+        plotProfileQuantity(ax1d[iax], radii, profiles, tDivList, colors=[color], label=label, linestyle='-', legend=(iax==0), plot_rmax=400*rB)
+        if nzeff == 8:
+            #_, profiles = calcFinalTimeAvg(D, tDivList, binNumList, "eta_EM", perzone_avg_frac=0.05, mask_list=mask_list, rescale=True)
+            #plotProfileQuantity(ax1d[iax], radii, profiles, tDivList, colors=[color], label='__nolegend__', linestyle='-.', legend=False, plot_rmax=1e3)
+            try:
+                pkl_name = "../data_products/" + dirtag + "_profiles_Eonly.pkl"
+                with open(pkl_name, "rb") as openFile:
+                    D2 = pickle.load(openFile)
+                tDivList, binNumList = setTimeBins(D2, 1, time_bin_factor=time_bin_factor, tmax=tmax)
+                mask_list = get_mask(D2, prioritize_inner=False) #True)
+                _, profiles = calcFinalTimeAvg(D2, tDivList, binNumList, "eta_KE", perzone_avg_frac=0.05, mask_list=mask_list, rescale=True)
+                plotProfileQuantity(ax1d[iax], radii, profiles, tDivList, colors=[color], label=['__nolegend__','kinetic'][iax==1], linestyle='--', legend=False, plot_rmax=400*rB, plot_rmin=1e3)
+                _, profiles = calcFinalTimeAvg(D2, tDivList, binNumList, "eta_TE", perzone_avg_frac=0.05, mask_list=mask_list, rescale=True)
+                plotProfileQuantity(ax1d[iax], radii, profiles, tDivList, colors=[color], label=['__nolegend__','thermal'][iax==1], linestyle=':', legend=False, plot_rmax=400*rB, plot_rmin=1e3)
+                ax1d[iax].axvline(rB, color=color, alpha=0.5)
+            except:
+                print('error')
     
     # plot settings
-    panel_label = [r'(a) $a_*=0.1$',r'(b) $a_*=0.3$',r'(c) $a_*=0.5$',r'(d) $a_*=0.7$',r'(e) $a_*=0.9$']
-    for i in range(len(ax)):
-        ax[i].set_ylabel(r'$\overline{\eta}$')
-        if i<5: ax[i].text(0.01, 0.90, panel_label[i], transform=ax[i].transAxes) #, fontsize=20)
-    ax[-1].set_xlabel(r'Radius [$r_g$]')
-    ax[0].set_xscale('log')
-    ax[0].set_yscale('log')
+    panel_label = [r'(a) $a_*=0$', r'(b) $a_*=0.1$',r'(c) $a_*=0.3$',r'(d) $a_*=0.5$',r'(e) $a_*=0.7$',r'(f) $a_*=0.9$']
+    for i in range(np.shape(ax)[0]):
+        ax[i,0].set_ylabel(r'$\overline{\eta}$')
+    for j in range(np.shape(ax)[1]):
+        ax[-1,j].set_xlabel(r'Radius [$r_g$]')
+        secax = ax[0,j].secondary_xaxis('top', functions=(rg2pc, pc2rg))
+        secax.set_xlabel(r'Radius [pc]')
+    for i,ax_temp in enumerate(ax1d):
+        ax_temp.text(0.01, 0.90, panel_label[i], transform=ax1d[i].transAxes) #, fontsize=20)
+    ax1d[0].set_xscale('log')
+    ax1d[0].set_yscale('log')
     #ax[0].legend(ncol=5, bbox_to_anchor=(0.,1.01), loc='lower left', columnspacing=0.8, fontsize=20)
-    ax[0].legend(fontsize=20)
-    ax[0].set_xlim([2, 9e7])
-    ax[0].set_ylim([5e-3, 1])
+    legend=ax1d[0].legend(fontsize=20, loc='upper right', title=r'$R_B/r_g$', ncol=2)
+    ax1d[1].legend(fontsize=20, loc='upper center')
+    plt.setp(legend.get_title(),fontsize=20)
+    ax1d[0].set_xlim([2, 9e7])
+    ax1d[0].set_ylim([2e-3, 1])
+        
 
     # save
     output = "../plots/compare_profiles_all.png"
@@ -931,31 +1003,28 @@ def compare_ic():
 
     matplotlib_settings()
     plt.rcParams.update({"font.size": 25})
-    quantities = ["Mdot", "eta"]
+    quantities = ["Mdot", "eta"] #Mdot"]
     figsize = (9, 4 * (len(quantities)))
     fig, ax = plt.subplots(len(quantities), 1, figsize=figsize, sharex=True) #, sharey=True)
     if len(quantities) == 1: ax = [ax]
     plt.subplots_adjust(wspace=0., hspace=0)
 
-    dirtags = ["092525_a0.9_rB2e3_mom_cons",
+    dirtags = [
+            "092525_a0.9_rB2e3_mom_cons",
             "011226_a0.9_rB2e3_mom_cons_rot+",
             "011226_a0.9_rB2e3_mom_cons_rot-",
             "011226_a0.9_rB2e3_mom_cons_beta100",
             "092525_a0.9_rB2e5_mom_cons_test",
             "012226_a0.9_rB2e5_rot+",
             "012226_a0.9_rB2e5_rot-",
+            "012726_a0.9_rB2e5_beta100",
+            #"102125_a0.9_rB2e5_mom_cons_96",
             ]
-    ncorr_Mdot = np.array([2,2,2,2,3,3,3])
-    ncorr_eta = np.array([2,2,2,2,3,3,3])
-    tmaxs = [700] * (len(dirtags))
-    colors = ['k', 'r', 'b','g', 'k','r','b']
+    tmaxs = [700] * (len(dirtags)-1) + [1200] #-3) + [400, 400, 400]
+    colors = ['k', 'b', 'r','g', 'k','b','r','g','c']
     time_bin_factor = 2.
     perzone_avg_frac = 0.05
     
-    mdot_save = []
-    eta_save = []
-    rB_save = []
-    a_save = []
     for i, dirtag in enumerate(dirtags):
         pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
         print(pkl_name)
@@ -965,15 +1034,14 @@ def compare_ic():
         mask_list = get_mask(D, prioritize_inner=False) #True)
         r_sonic = D["dump"]["rs"]
         mdot = D["dump"]["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = D["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         rEH = D["dump"]["r_eh"]
-        rB_save += [rB]
-        a_save += [D["dump"]["a"]]
         for j, quantity in enumerate(quantities):
             if 1: #quantity != "etaMdot":
                 radii, profiles = calcFinalTimeAvg(D, tDivList, binNumList, quantity, perzone_avg_frac=perzone_avg_frac, mask_list=mask_list, rescale=True, use_avged_Mdot=False)
                 if quantity == "Mdot":
-                    r_read = rEH
+                    r_read = 5 #rEH
                 elif quantity == "phib":
                     r_read = rEH
                 elif quantity == "eta":
@@ -986,20 +1054,13 @@ def compare_ic():
                 q_out = profiles[0][i_r]
                 print("at r={:.5g}, {}={:.5g}".format(radii[0][i_r], quantity, profiles[0][i_r]))
                 color = colors[i]
-                if quantity == "Mdot": 
-                    mdot_save += [q_out]
-                    ncorr = ncorr_Mdot[i]
-                elif quantity == "eta": 
-                    eta_save += [q_out]
-                    ncorr = ncorr_eta[i]
-                elif quantity == "etaMdot": 
-                    etaB_save += [q_out]
-                    ncorr = ncorr_etaB[i]
                 
+                if quantity == "etaMdot": quantity="etaB"
                 x_mean, x_std, _, _, quantity_arr = calcStats(pkl_name, quantity, average_factor=time_bin_factor, use_Mdot_mean=False, rescaleMdot=True, tmax=tmaxs[i], perzone_avg_frac=perzone_avg_frac, radius=r_read, verbose=False)
                 mean_est = np.exp(x_mean + x_std ** 2 / 2.)
+                ncorr = get_lcorr(quantity_arr)
                 if 1:
-                    if abs((np.mean(np.exp(quantity_arr)) - q_out) / q_out) > 1e-1:
+                    if abs((np.mean((quantity_arr)) - q_out) / q_out) > 1e-1:
                         pdb.set_trace()
                     ax[j].plot(rB, q_out, color=color, marker='.', ms=10)
                 Neff = len(quantity_arr) / ncorr
@@ -1008,22 +1069,25 @@ def compare_ic():
                 nzeff = D["dump"]["Params"]["Multizone/nzones_eff"]
                 low = mean_est - np.exp(x_mean + x_std ** 2 / 2. - cox_err)
                 high = np.exp(x_mean + x_std ** 2 / 2. + cox_err) - mean_est
-                ax[j].errorbar(rB, mean_est, yerr=[[low], [high]], color=color, capsize=6)
+                ax[j].errorbar(rB, mean_est, yerr=[[low], [high]], color=color, capsize=6, alpha=0.5)
 
-    # Cho+24 scaling
-    rBlist = np.logspace(3, 6, 10)
-    ax[0].plot(rBlist, np.power(rBlist/6, -0.5), 'b')
+    # fitted scaling
+    rBlist = np.logspace(2, 7, 10)
+    ax[0].plot(rBlist, (-3*0.9+4.7)*np.power(rBlist, -0.5), 'k', alpha=0.5)
+    #ax[1].plot(rBlist, (0.98*0.9+0.13)*np.power(rBlist, -0.6), 'k', alpha=0.5)
     
     # plot settings
     ax[0].set_xscale('log')
+    ax[0].set_xlim([2e2, 1e6])
     ax[0].set_ylim([5e-4, 0.4])
+    #ax[1].set_ylim([1.5e-4, 1e-1])
     ax[1].set_ylim([5e-3, 1])
-    for ax_temp in ax:
-        ax_temp.set_yscale('log')
-        ax_temp.set_xlabel(r'$R_B$ [$r_g$]')
-    ax[0].axhline(1, color='k', ls=":")
-    ax[0].set_ylabel(r"$\log_{10}{\overline{\dot{M}}(r_H)}$ [$\dot{M}_B$]")
-    ax[1].set_ylabel(r'$\log_{10}{\overline{\eta}(R_B/3)}$')
+    for i in range(np.shape(ax)[0]):
+        ax[i].set_yscale('log')
+        ax[i].set_xlabel(r'$R_B$ [$r_g$]')
+    ax[0].set_ylabel(r"${\overline{\dot{M}}}$ [$\dot{M}_B$]")
+    #ax[1].set_ylabel(r'${\overline{\eta}}$')
+    ax[1].set_ylabel(r'${\overline{\dot{E}}}$ [$\dot{M}_B c^2$]')
     # 2nd axis
     if 1:
         secax = ax[0].secondary_xaxis('top', functions=(rB2T, T2rB))
@@ -1035,6 +1099,276 @@ def compare_ic():
 
     # save
     output = "../plots/compare_ic.png"
+    plt.savefig(output, bbox_inches="tight")
+    print("saved to " + output)
+    plt.close(fig)
+
+def compare_ic_histogram():
+    from plotEvolution import calcStats
+
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    quantities = ["Mdot", "eta"]
+    figsize = (9, 4 * (len(quantities)))
+    fig, ax = plt.subplots(len(quantities), 1, figsize=figsize)
+    if len(quantities) == 1: ax = [ax]
+
+    dirtags = [
+            "092525_a0.9_rB2e3_mom_cons",
+            "011226_a0.9_rB2e3_mom_cons_rot+",
+            "011226_a0.9_rB2e3_mom_cons_rot-",
+            "011226_a0.9_rB2e3_mom_cons_beta100",
+            #"092525_a0.9_rB2e5_mom_cons_test",
+            #"012226_a0.9_rB2e5_rot+",
+            #"012226_a0.9_rB2e5_rot-",
+            #"012726_a0.9_rB2e5_beta100",
+            #"102125_a0.9_rB2e5_mom_cons_96",
+            ]
+    tmaxs = [700] * (len(dirtags))
+    colors = ['k', 'b', 'r','g', 'k','b','r','g','c']
+    time_bin_factor = 2.
+    perzone_avg_frac = 0.05
+    
+    for i, dirtag in enumerate(dirtags):
+        pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
+        print(pkl_name)
+        for j, quantity in enumerate(quantities):
+            color = colors[i]
+            ax[j] = plotHistogram(pkl_name, ax_passed=ax[j], quantity=quantity, tmax=tmaxs[i], color=color)
+
+    # save
+    output = "../plots/compare_ic_hist.png"
+    plt.savefig(output, bbox_inches="tight")
+    print("saved to " + output)
+    plt.close(fig)
+
+def compare_snapshots():
+    from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+    from pyharm.plots.overlays import overlay_field
+    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 25})
+    
+    fig = plt.figure(figsize=(30,12))
+    spec_snp = GridSpec(1, 1)[0]
+    plt.subplots_adjust(hspace=0.01)
+    
+    gs = GridSpecFromSubplotSpec(1, 5, subplot_spec = spec_snp, hspace=0.02, wspace=0.02)
+    ax = []
+    for cell in gs: ax += [plt.subplot(cell)]
+    ax = np.array(ax).reshape(1,-1)
+
+    plotrc={}
+    #plotrc.update({'xlabel': False, 'ylabel': False,'xticks': [], 'yticks': [],'cbar': False, 'frame': False, 'no_title': True, 'shading': 'flat'})
+    plotrc.update({'xlabel': False, 'xticks': [], 'yticks': [],'cbar': False, 'shading': 'flat'})
+    inwards = -1 # 1
+
+    # read file
+    fnums = [
+             1162, #1100,
+            600,   #800, 
+             1906, #1987,
+             5551, #1944,
+             9047] #7429,
+    ifnum = 0
+    titles = [r'$R_B/r_g\approx 400$',r'$\approx 2000$',r'$\approx 2\times 10^4$',r'$\approx 2\times 10^5$',r'$\approx 2\times 10^6$']
+    
+    for dirtag in gdirtags:
+        # basic info
+        fn = glob.glob("../data/" + dirtag + "/*00000*.phdf")[0]
+        dump = pyharm.load_dump(fn,ghost_zones=False)
+        a = dump["a"]
+        if a == 0.9: #a == 0.5 or 
+            fnum = fnums[ifnum]
+            ifnum+=1
+            fn = glob.glob("../data/" + dirtag + "/*{:05d}*.phdf".format(fnum))[0]
+            dump = pyharm.load_dump(fn,ghost_zones=False)
+            print(dump["n_step"])
+            nzeff = dump["Params"]["Multizone/nzones_eff"]
+            axrow = 0#int((a - 0.5)/0.4)
+            axcol = nzeff - 4
+            r_sonic = dump["rs"]
+            mdot = dump["mdot"]
+            gam = dump["gam"]
+            rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
+            sz = 10 * rB # 10
+            window = (-sz, sz, -sz, sz)
+            if axrow == 0:
+                plotrc['label'] = titles[axcol]
+                plotrc['no_title'] = False
+            else: plotrc['no_title'] = True
+            if axcol == 0: plotrc['ylabel'] = True
+            else: plotrc['ylabel'] = False
+            #im1 = pyharm.plots.plot_xz(ax[axrow,axcol], dump, "log_Theta", window=window, vmin=1e-6, vmax=1, cmap='gist_heat', **plotrc)
+            im1 = pyharm.plots.plot_xz(ax[axrow,axcol], dump, "log_T", window=window, vmin=2e6, vmax=5e11, cmap='gist_heat', **plotrc)
+            #im1 = pyharm.plots.plot_xz(ax[axrow,axcol], dump, "symlog_FE_norho", window=window, vmin=1e-6, vmax=1, **plotrc) # TODO
+            
+            iwv = dump["Params"]["Multizone/i_within_vcycle"]
+            i_zone = abs(iwv - (nzeff - 1))
+            
+            print("fnum {} t={:.5g} tg / {:.5g} tB izone{}".format(fnum, dump["t"], dump["t"] / np.power(rB, 3./2), i_zone))
+        
+            scale = np.power(10,np.floor(np.log10(sz)))
+            c= 'white'
+            if axrow == 0: 
+                scalebar = AnchoredSizeBar(ax[0,axcol].transData, scale, r'$10^{:d}\, r_g$'.format(int(np.log10(scale))), 'lower left', pad=0.5, sep=5, color=c, frameon=False, size_vertical=sz/8**2)
+                ax[0,axcol].add_artist(scalebar)
+                scale = np.power(10,np.floor(np.log10(rg2pc(sz))))
+                scale_rg = pc2rg(scale)
+                scalebar = AnchoredSizeBar(ax[0,axcol].transData, scale_rg, r'$10^{:d}\,$pc'.format(int(np.log10(scale))), 'lower right', pad=0.5, sep=5, color=c, frameon=False, size_vertical=sz/8**2)
+                ax[0,axcol].add_artist(scalebar)
+        
+            #if nzeff==4:
+            #    ax[axrow,0].text(-sz*0.9, sz*0.7, r'$a_*=$'+str(a), color='w', fontsize=40)
+            
+            # show RB
+            circle1 = plt.Circle((0, 0), rB, ec='grey', fill=False, ls="--", lw=3)
+            ax[axrow,axcol].add_artist(circle1)
+            if axcol==4: ax[axrow,axcol].text(rB*1.5, -rB*0.5, r'$R_B$', color='grey', fontsize=30)
+
+            if axrow==1:ax[axrow,axcol].title.set_visible(False)
+
+            if 0:
+                # show B fields
+                at_i = np.argmin(abs(dump["r1d"] - sz * 1.5))
+                overlay_field(ax[axrow,axcol], dump, half_cut=True, nlines=30, reverse=True, i_slice=slice(0, at_i), color='w')#, sum=False)
+
+    #ax[0,0].set_ylabel(r'$a_*=0.5$')
+    ax[0,0].set_ylabel(r'$a_*=0.9$')
+    
+
+    if 1:
+        # TODO
+        # colorbar for each rows
+        cb=fig.colorbar(im1, cax=ax[0,-1].inset_axes((1.01, 0.0, 0.1, 1.0)))
+        cb.ax.tick_params(labelleft=False, labelright=True)
+        cb.ax.set_ylabel(r'$T$ [K]')
+    
+    output = "../plots/compare_snapshot.pdf"
+    plt.savefig(output,bbox_inches='tight')
+    print("saved to " + output)
+    plt.close()
+
+def compare_spinup(xaxis_rB=False):
+    matplotlib_settings()
+    plt.rcParams.update({"font.size": 20})
+    fig, ax = plt.subplots(1, 1, figsize=(7,5))
+
+    dirtags = gdirtags + [
+            "011226_a0.9_rB2e3_mom_cons_rot+",
+            "011226_a0.9_rB2e3_mom_cons_rot-",
+            #"011226_a0.9_rB2e3_mom_cons_beta100",
+            "012226_a0.9_rB2e5_rot+",
+            "012226_a0.9_rB2e5_rot-",
+            "012726_a0.9_rB2e5_beta100",
+            #"051225_oz_a0.9_toriilike_newflr",
+            "051225_n4_a0.9_toriilike_newflr",
+            "051225_n4_a-0.9_toriilike_eks",
+            #"012026_a0_rB2e5_mom_cons_test",
+            #"051225_n4_a0.9_torrilike_nocap_newflr",
+            #"052825_n4_a-0.9_torilike_nocap_newflr",
+            #"102125_a0.9_rB2e5_mom_cons_96",
+            ]
+    labels = [r'$R_B/r_g\approx 400$',r'$2000$', r'$2\times 10^4$', r'$2\times 10^5$',r'$2\times 10^6$']
+    tmaxs = [700] * (len(dirtags)-5) + [400,400,400,50, 50]
+    if xaxis_rB:
+        colors = list(plt.cm.gnuplot(np.linspace(0.9, 0., 5))) + ['gray']
+    else: colors = list(plt.cm.binary(np.linspace(0.2, 1., 5)))
+    #else: colors = list(plt.cm.coolwarm(np.linspace(0., 1., 5)))
+    time_bin_factor = 2.
+    perzone_avg_frac = 0.05
+    
+    a_save = []
+    s_save = []
+    for i, dirtag in enumerate(dirtags):
+        pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
+        print(pkl_name)
+        with open(pkl_name, "rb") as openFile:
+            D = pickle.load(openFile)
+        tDivList, binNumList = setTimeBins(D, 1, time_bin_factor=time_bin_factor, tmax=tmaxs[i])
+        mask_list = get_mask(D, prioritize_inner=False) #True)
+        r_sonic = D["dump"]["rs"]
+        mdot = D["dump"]["mdot"]
+        gam = D["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
+        rEH = D["dump"]["r_eh"]
+        a = D["dump"]["a"]
+        try:
+            oz = False
+            nzeff = D["dump"]["Params"]["Multizone/nzones_eff"]
+        except: 
+            oz = True
+            nzeff = 4
+        
+        # TODO: from here
+        radii, profiles_j = calcFinalTimeAvg(D, tDivList, binNumList, "norm_Ldot", perzone_avg_frac=perzone_avg_frac, mask_list=mask_list, rescale=True, use_avged_Mdot=False)
+        _, profiles_e = calcFinalTimeAvg(D, tDivList, binNumList, "norm_Edot", perzone_avg_frac=perzone_avg_frac, mask_list=mask_list, rescale=True, use_avged_Mdot=False)
+        _, profiles_eta = calcFinalTimeAvg(D, tDivList, binNumList, "eta_EM", perzone_avg_frac=perzone_avg_frac, mask_list=mask_list, rescale=True, use_avged_Mdot=False)
+        r_read = 5
+        i_r = np.argmin(abs(radii[0] - r_read))
+        s = profiles_j[0][i_r] - 2. * profiles_e[0][i_r] * a
+        #color = colors[np.where(np.array([0.1, 0.3, 0.5, 0.7, 0.9, 0.97])==a)[0][0]]
+        color = colors[max(nzeff-4,0)]
+        ms = 10
+        marker ='.'
+        if oz: 
+            marker = '+'
+        elif "96" in dirtag:
+            color = 'g'
+        else:
+            if D["dump"]["uphi"]>0: 
+                color='b'
+                #marker='+'
+            elif D["dump"]["uphi"]<0: 
+                color='r'
+                #marker='x'
+            if nzeff < 4:
+                marker = '*'
+                #if D["dump"]["uphi"]>0: color='b'
+                #elif D["dump"]["uphi"]<0: color='r'
+            print(s)
+        if xaxis_rB: ax.plot(rB, s, color=color, marker=marker, ms=10)
+        else:
+            label = labels[nzeff-4]
+            labels[nzeff-4] = '__nolegend__'
+            if nzeff == 8: 
+                a_save += [a]
+                s_save += [s]
+            ax.plot(a, s, color=color, marker=marker, ms=ms, label=label, ls='', mfc='none')
+            if 0:
+                rEH = calc_rEH(a)
+                OmegaH = a / (2 * rEH)
+                k=0.35 # 0.5
+                s_EM = -profiles_eta[0][i_r] * (1. / (k * OmegaH) - 2. * a) # eq 20 in Lowell+23
+                ax.plot(a, s_EM, color=color, alpha=0.5, marker='+')
+
+    # plot settings
+    ax.set_ylabel(r'spinup $\overline{s}$')
+    if xaxis_rB:
+        # x-axis RB
+        ax.set_xscale('log')
+        ax.set_xlabel(r'$R_B$ [$r_g$]')
+        # 2nd axis
+        secax = ax.secondary_xaxis('top', functions=(rB2T, T2rB))
+        secax.set_xlabel(r'$T_{\infty}$ [K]') #,fontsize=fontsize, labelpad=7)
+    else:
+        # x-axis a
+        ax.set_xlim([-0.1,1])
+        ax.set_xticks([-0.1,0.1,0.3,0.5,0.7,0.9])
+        a_arr = np.linspace(-0.1,1,100)
+        popt, pcov = curve_fit(lin_func, a_save, s_save)
+        print(popt)
+        #ax.plot(a_arr, lin_func(a_arr, *popt), color='k', alpha=0.5)
+        ax.plot(a_arr, lin_func(a_arr, a=-3.7, b=0), color='k', alpha=0.5)
+        a_arr = np.linspace(0,1,100)
+        ax.plot(a_arr, (0.45-12.53*a_arr-7.8*a_arr**2+9.44*a_arr**3+5.71*a_arr**4-4.03*a_arr**5),'b:', label='RN22 prograde')
+        ax.plot(a_arr, -(0.45+12.53*a_arr-7.8*a_arr**2-9.44*a_arr**3+5.71*a_arr**4+4.03*a_arr**5), 'r:', label='RN22 retrograde')
+        ax.set_xlabel(r'$a_*$')
+        ax.legend(fontsize=12)
+
+    # save
+    output = "../plots/compare_spinup.pdf"
     plt.savefig(output, bbox_inches="tight")
     print("saved to " + output)
     plt.close(fig)
@@ -1051,4 +1385,7 @@ if __name__ == "__main__":
     #show_tavged(also_show_rprofile=True)
     #compare_resolution()
     #compare_ic()
+    #compare_ic_histogram()
+    #compare_snapshots()
+    #compare_spinup()
 

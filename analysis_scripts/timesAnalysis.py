@@ -233,10 +233,14 @@ if __name__ == "__main__":
     dirname = "030425_a0.5_rdepgmax5"
     dirname = "041625_n4_a0.9_toriilike_jks2_smth5_reconnect"
     dirname = "111725_a0.9_rB2e5_mom_cons_rdepgmax"
-    fnum = 57  # 450  # 2000 #5000
+    dirname = "120525_a0.9_rB2e5_mom_cons_rdepgmax3_uconst"
+    dirname = "121925_a0.9_rB2e5_mom_cons_rdepgmax2_vshallow"
+    #dirname = "122125_a0.9_rB2e5_mom_cons_rdepgmax3_uconst"
+    fnum = 590  # 450  # 2000 #5000
     #fname = glob.glob("../data/" + dirname + "/*.out0.{:05d}.phdf".format(fnum))[0]
     #fname = sorted(glob.glob("../data/"+dirname+"/*.out0.{:05d}.phdf".format(fnum)))[-1]
     fname = sorted(glob.glob("../data/"+dirname+"/*.phdf"))[-1]
+    print(fname)
     #compare_speed(for_proposal=True) #["042125_a0.9_oz_jks", "050625_a0.9_rB2e5_oz_test", "042225_n4_a0.9_bondi_jks2_nocap", "042325_a0.9_rB2e3_bondi", "042325_a0.9_rB2e5_bondi"]) #"042125_n4_a0.9_bondi_jks2", "042825_a0.9_rB2e4_bondi_rot", , "042725_a0.9_rB2e5_bondi_rot"
     if 0:
         dirtags = [

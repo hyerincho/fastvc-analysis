@@ -50,7 +50,7 @@ def compareRuns(dirtags, quantities, colors, labels=None, linestyles=None, plot_
             fig_ax = old_script.plotProfiles(pkl_name, quantities, zone_time_average_fraction=perzone_avg_frac, fig_ax=fig_ax, num_time_chunk=1, color=colors[i], label=labels[i], rescale_Mdot=rescale, average_factor=time_bin_factor)
             # fig_ax = (fig, axes)
         else:
-            fig_ax = plotProfiles(pkl_name, quantities, plot_dir=plot_dir, perzone_avg_frac=perzone_avg_frac, num_time_chunk=1, fig_ax=fig_ax, color_list=[colors[i]], label=labels[i], linestyle=linestyles[i], tmax=tmax[i], rescale=rescale, time_bin_factor=time_bin_factor, show_rb=show_rb, legend_all=False, verbose=verbose, prioritize_inner=prioritize_inner, use_avged_Mdot=use_avged_Mdot, flip_sign=flip_sign)
+            fig_ax = plotProfiles(pkl_name, quantities, plot_dir=plot_dir, perzone_avg_frac=perzone_avg_frac, num_time_chunk=1, fig_ax=fig_ax, color_list=[colors[i]], label=labels[i], linestyle=linestyles[i], tmax=tmax[i], rescale=rescale, time_bin_factor=time_bin_factor, show_rb=show_rb, legend_all=False, verbose=verbose, prioritize_inner=prioritize_inner, use_avged_Mdot=use_avged_Mdot, flip_sign=flip_sign)#, flatten_rho=True)
 
     if show_allowed_range:
         for iq, quantity in enumerate(quantities):
@@ -104,44 +104,22 @@ def compareN4Beta():
     compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, rescale=True)
 
 
-def compareSpin(a=0.5, time_bin_factor=2):
+def compareSpin(a=0.5, time_bin_factor=2, nzeff=8):
     linestyleList = None
     oz_num = 0
     if a == None:
         # compare between different spins
-        dirtagList = [  # TODO: include oz from old multizone
-            # "100724_a0.0_n4",
-            # "100724_a0.1_n4",
-            # "100724_a0.3_n4",
-            # "100724_a0.5_n4",
-            # "100724_a0.7_n4",
-            # "100724_a0.9_n4",
-            # "030425_a0.0_b8n4_safe",
-            "030625_a0.0_n4_013124",
-            # "030425_a0.1_b8n4_safe",
-            "031125_a0.1_cap_correctly",
-            # "030425_a0.3_b8n4_safe",
-            "031125_a0.3_cap_correctly",
-            # "030425_a0.5_b8n4_safe_longtin10",
-            "031125_a0.5_cap_correctly",
-            # "030425_a0.7_b8n4_safe",
-            "031125_a0.7_cap_correctly",
-            # "030425_a0.9_b8n4_safe",
-            "031125_a0.9_cap_correctly",
-            # "2023/122723_n4_onezone_wks0.04/00000",
-            "delta/030525_a0.0_oz",
-            "delta/030525_a0.5_oz",
-            "delta/030525_a0.9_oz",
-            # "030325_a0.5_oz_128",
-            # "030325_a0.9_oz_128",
-            # "100724_a0.5_oz",
-        ]
-        oz_num = 3
-        colorList = plt.cm.gnuplot(np.linspace(0.0, 0.9, len(dirtagList) - oz_num))  # colors for each runs
-        colorList = np.append(colorList, [colorList[0], colorList[3], colorList[-1]], axis=0)  # for onezones
-        # colorList = np.append(colorList, [colorList[3], colorList[5]], axis=0)  # for onezones
-        labelList = ["0", "0.1", "0.3", "0.5", "0.7", "0.9", "0.0_oz", "0.5_oz", "0.9_oz"]  #
-        linestyleList = ["solid"] * (len(dirtagList) - oz_num) + ["dashed"] * oz_num
+        dirtagList = []
+        for dirtag in gdirtags:
+            pkl_name = "../data_products/" + dirtag + "_profiles_all.pkl"
+            with open(pkl_name, "rb") as openFile:
+                D = pickle.load(openFile)
+            if D["dump"]["Params"]["Multizone/nzones_eff"] == nzeff:
+                dirtagList += [dirtag]
+
+        colorList = list(plt.cm.gnuplot(np.linspace(0.9, 0., 5))) + ['gray']
+        labelList = ["0.1", "0.3", "0.5", "0.7", "0.9", "0.97"]  #
+        linestyleList = ["solid"] * (len(dirtagList))
         plot_dir = "../plots/030525_different_spin"
     if a == 0.5:
         dirtagList = [
@@ -205,15 +183,15 @@ def compareSpin(a=0.5, time_bin_factor=2):
         plot_dir = "../plots/n4_spin_" + str(a)
 
     # quantityList = ["Mdot", "rho", "beta", "eta", "eta_Fl", "eta_EM", "Omega", "T"] #"Omega"["Mdot", "eta", "eta_Fl", "eta_EM"] #
-    quantityList = ["eta"] #, "phib"] #, "Omega"]  #] #, "beta"] #, "Mdot"] #  , "T"] #
+    quantityList = ["u^r"] #["eta"] #, "phib"] #, "Omega"]  #] #, "beta"] #, "Mdot"] #  , "T"] #
     if a == None:
         rEH = 2  # just use a=0 rEH
     else:
         rEH = calc_rEH(a)
-    xlim = (rEH, 3e4)
+    xlim = None #(rEH, 3e4)
     
-    tmax_capped = 50
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[tmax_capped] * 5+[450, 450], rescale=True, time_bin_factor=time_bin_factor, show_rb='grey', figsize=(8 * len(quantityList),5.5), prioritize_inner=True, verbose=True)  # tmax 4e5
+    tmax_capped = 700 #50
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[tmax_capped] * 5+[450, 450], rescale=True, time_bin_factor=time_bin_factor, show_rb='grey', figsize=(8 * len(quantityList),5.5), prioritize_inner=True, verbose=True, perzone_avg_frac=0.05)  # tmax 4e5
 
 
 def compareSpinTimeAverages(quantity="phib", tmax=None, average_factor=2, show_RN22=False):
@@ -520,7 +498,8 @@ def compareMdotEta(a=None, time_bin_factor=2.0, rescale=False):
         a = get_spin(D)
         r_sonic = D["dump"]["rs"]
         mdot = D["dump"]["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = D["dump"]["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         if D["dump"]["parthenon/job/problem_id"] == "torus":
             is_torus = True
         else:
@@ -634,7 +613,7 @@ def compareCoords(time_bin_factor=2, tmax=None):
         compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=[None] * (len(dirtagList)), rescale=True, time_bin_factor=time_bin_factor)  # tmax 4e5
 
 
-def compareRB(a=0.9, time_bin_factor=2, tmax=None):
+def compareRB(a=0.9, time_bin_factor=2, tmax=None, cho2025fig=True):
     linestyleList = None
     if a == 0.0:
         dirtagList = ["042125_a0.0_rB2e3_jks2", "042125_a0.0_rB2e5_jks2"]
@@ -651,35 +630,51 @@ def compareRB(a=0.9, time_bin_factor=2, tmax=None):
         ]
         labelList = ["400", "2000", "2e5"]
         colorList = ["black", "tab:blue", "c", "r", "tab:orange", "m", "g"]  # colors for each runs
-    if a == 0.9:
+    if a == 0.7:
         dirtagList = [
-            ## EKS
-            #"051225_n4_a0.9_bondi_nocap_newflr",
-            "101225_n4_a0.9_bondi_nocap_momcons",
-            #"043025_a0.9_rB2e3_bondi_eks",
-            "092525_a0.9_rB2e3_mom_cons",
-            #"delta/051325_a0.9_rB2e5_bondi_eks",
-            "delta/092525_a0.9_rB2e4_mom_cons",
-            #"052825_a0.9_rB2e5_bondi_eks_largerout",
-            "092525_a0.9_rB2e5_mom_cons_test",
-            #"043025_a0.9_rB2e5_bondi_eks",
-            #"080625_a0.9_rB2e5_96",
-            ## JKS
-            #"042225_n4_a0.9_bondi_jks2_nocap",
-            #"042325_a0.9_rB2e3_bondi",
-            #"042325_a0.9_rB2e5_bondi",
-            # "040325_n4_a0.9_torrilike_nocap",
-            # "042225_n4_a0.9_toriilike_jks2_nocap",
-            #"042125_n4_a0.9_bondi_jks2",
-            # "041725_a0.9_rB2e3_jks2_smth2",
-            # "041625_a0.9_rB2e3_jks2_smth3",
-            #"042325_a0.9_rB2e3_bondi",
-            # "041725_a0.9_rB2e5_jks2_smth2.5",
-            #"042825_a0.9_rB2e4_bondi_rot",
-            #"041825_a0.9_rB2e5_jks2_smth2",
-            # "042725_a0.9_rB2e5_bondi_rot",
-        ]
-        labelList = ["4e2", "2e3", "2e4", "2e5", "2e5hi", "2e5_tl"] #, "2e4"
+            "121325_n4_a0.7_bondi_nocap_momcons",
+            "delta/102825_a0.7_rB2e3_momcons",
+            "delta/102825_a0.7_rB2e4_momcons",
+            "delta/092425_a0.7_rB2e5_momcons",
+            "110725_a0.7_rB2e6_momcons",
+                ]
+        labelList = ["d1", "d2", "d3", "d4", "d5"]
+        colorList = plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtagList)))
+    if a == 0.9:
+        if cho2025fig:
+            dirtagList = [
+                ## EKS
+                "051225_n4_a0.9_bondi_nocap_newflr",
+                "043025_a0.9_rB2e3_bondi_eks",
+                "delta/051325_a0.9_rB2e5_bondi_eks",
+                "052825_a0.9_rB2e5_bondi_eks_largerout",
+                #"043025_a0.9_rB2e5_bondi_eks",
+                #"080625_a0.9_rB2e5_96",
+                ## JKS
+                #"042225_n4_a0.9_bondi_jks2_nocap",
+                #"042325_a0.9_rB2e3_bondi",
+                #"042325_a0.9_rB2e5_bondi",
+                # "040325_n4_a0.9_torrilike_nocap",
+                # "042225_n4_a0.9_toriilike_jks2_nocap",
+                #"042125_n4_a0.9_bondi_jks2",
+                # "041725_a0.9_rB2e3_jks2_smth2",
+                # "041625_a0.9_rB2e3_jks2_smth3",
+                #"042325_a0.9_rB2e3_bondi",
+                # "041725_a0.9_rB2e5_jks2_smth2.5",
+                #"042825_a0.9_rB2e4_bondi_rot",
+                #"041825_a0.9_rB2e5_jks2_smth2",
+                # "042725_a0.9_rB2e5_bondi_rot",
+            ]
+            labelList = ["4e2", "2e3", "2e4", "2e5", "2e5hi", "2e5_tl"] #, "2e4"
+        else:
+            dirtagList = [
+                "121325_n4_a0.9_bondi_nocap_momcons",
+                "092525_a0.9_rB2e3_mom_cons",
+                "delta/092525_a0.9_rB2e4_mom_cons",
+                "092525_a0.9_rB2e5_mom_cons_test",
+                "092525_a0.9_rB2e6_momcons",
+                    ]
+            labelList = ["e1", "e2", "e3", "e4", "e5"]
         #colorList = ["black", "tab:blue", "c", "g", "tab:orange", "m", "r"]  # colors for each runs
         colorList = plt.cm.gnuplot(np.linspace(0.9, 0., len(dirtagList)))
     plot_dir = "../plots/042225_compareRB_spin_" + str(a)
@@ -691,7 +686,7 @@ def compareRB(a=0.9, time_bin_factor=2, tmax=None):
         rEH = calc_rEH(a)
     xlim = (rEH, 1e8)
 
-    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=tmax, rescale=True, time_bin_factor=time_bin_factor, verbose=True, show_rb=True, show_allowed_range=True, perzone_avg_frac=0.05) #, use_avged_Mdot=True) #, prioritize_inner=True)  #0.05
+    compareRuns(dirtagList, quantityList, colorList, labels=labelList, plot_dir=plot_dir, xlim=xlim, linestyles=linestyleList, tmax=tmax, rescale=True, time_bin_factor=time_bin_factor, verbose=True, show_rb=True, show_allowed_range=cho2025fig, perzone_avg_frac=0.05) #, use_avged_Mdot=True) #, prioritize_inner=True)  #0.05
 
 def compareMdotIO(time_bin_factor=2, tmax=None):
     matplotlib_settings()
@@ -788,9 +783,9 @@ def compareEtaEM(time_bin_factor=2, tmax=None):
     print("saved to " + output)
 
 def _main():
-    #compareSpin(0.9, time_bin_factor=1.25) #2) #1.5) #
+    compareSpin(None, nzeff=4) #0.9, time_bin_factor=1.25) #2) #1.5) #
     #compareCoords(time_bin_factor=1.25, tmax=50) #1.2)
-    compareRB(0.9, time_bin_factor=2., tmax=[700, 700, 700, 700, 700]) #1.25)  # 2.) #
+    #compareRB(0.7, time_bin_factor=2., tmax=[700, 700, 700, 700, 700],cho2025fig=False) #1.25)  # 2.) #
     #compareMdotIO(time_bin_factor=1.25, tmax=700)
 
     tmax = 2e5  # None #4.5e5 #

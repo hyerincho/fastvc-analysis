@@ -60,7 +60,8 @@ def observation_compare_with_M87(fnum, show_full_sb=False):
     print(dump["n_step"])
     r_sonic = dump["rs"]
     mdot = dump["mdot"]
-    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    gam = dump["gam"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
     iwv = dump["Params"]["Multizone/i_within_vcycle"]
     nzeff = dump["Params"]["Multizone/nzones_eff"]
     i_zone = abs(iwv - (nzeff - 1))

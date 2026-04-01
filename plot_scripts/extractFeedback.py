@@ -15,7 +15,8 @@ def getThProfile(dirtag, quantity, radius=None, zones_to_av=1, tmax=None, averag
     nzeff = dump["Params"]["Multizone/nzones_eff"]
     r_sonic = dump["rs"]
     mdot = dump["mdot"]
-    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+    gam = dump["gam"]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
     tB = np.power(rB, 3./2)
 
     
@@ -95,8 +96,8 @@ def getThProfile(dirtag, quantity, radius=None, zones_to_av=1, tmax=None, averag
     avged /= (num_sum * zones_to_av)
     if rescale:
         rho_save /= num_sum
-        Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot)[0]
-        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot)[0]
+        Mdot_analytic = bondi.get_quantity_for_rarr([rB], "Mdot", rs=r_sonic, mdot=mdot, gam=gam)[0]
+        rho_analytic = bondi.get_quantity_for_rarr([100 * rB], "rho", rs=r_sonic, mdot=mdot, gam=gam)[0]
         print(rho_analytic / (Mdot_analytic * rho_save))
         avged *= rho_analytic / (Mdot_analytic * rho_save)
     if quantity == "eta":

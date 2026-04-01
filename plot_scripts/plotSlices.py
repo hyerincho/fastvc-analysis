@@ -114,7 +114,7 @@ def FE_slice(dirtag, num_files=-1, native=True, sum_each_ann=False):
         ax[0, j].set_yscale("log")
         ax[0, j].set_xlim([np.log10(dump["r_eh"]), np.log10(dump["r_out"])])
         ax[0, j].set_ylim([vmax / 1e2, vmax])
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=dump["rs"], mdot=dump["mdot"])[0]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=dump["rs"], mdot=dump["mdot"], gam=dump["gam"])[0]
         ax[0, j].axvline(np.log10(rB), color="grey", lw=2, alpha=1, ls="--")  # show R_B
     for ax_temp in (ax[:, 1:]).flatten():
         ax_temp.set_ylabel("")
@@ -215,6 +215,8 @@ def tavgedSlice(dirtag, quantity, num_files=-1, native=True, sum_each_ann=False,
         vmin = 1e-5; vmax = 1e-1
     elif quantity == "FE_EM_A":
         vmin = 1e-5; vmax = 1e-3
+    elif quantity == "FE_norho_A":
+        vmin = 1e-5; vmax = 1e-3
     elif quantity == "FM_A":
         vmin = 1e-5; vmax = 1e-1
     if np.any(quantity_tavg < 0.0):
@@ -235,7 +237,7 @@ def tavgedSlice(dirtag, quantity, num_files=-1, native=True, sum_each_ann=False,
     ax[0].set_xlim([np.log10(dump["r_eh"]), np.log10(dump["r_out"])])
     if not symlog: ax[0].set_ylim([vmin, vmax])
     else: ax[0].set_ylim([vmax/1e2, vmax])
-    rB = bondi.get_quantity_for_rarr([1], "RB", rs=dump["rs"], mdot=dump["mdot"])[0]
+    rB = bondi.get_quantity_for_rarr([1], "RB", rs=dump["rs"], mdot=dump["mdot"], gam=dump["gam"])[0]
     ax[0].axvline(np.log10(rB), color="grey", lw=2, alpha=1, ls="--")  # show R_B
     ylabel = variableToLabel(quantity)
     ax[0].set_ylabel(ylabel)
@@ -248,6 +250,13 @@ def tavgedSlice(dirtag, quantity, num_files=-1, native=True, sum_each_ann=False,
         phi_averaged *= np.power(radii[:, np.newaxis, np.newaxis], rscale)
         vmin = vmax / 100
     plot_xz(ax[1], dump, phi_averaged, native=native, log_r=(~native), log=log, symlog=symlog, vmin=vmin, vmax=vmax, cbar=1, shading="flat", window=window, average=0, xlabel=native, ylabel=native, half_cut=True)
+    if 0:
+        irB = np.argmin(abs(dump["r1d"] - rB))
+        ax[0].plot(dump["th1d"], phi_averaged[irB], c='k')
+        if symlog: ax[0].plot(dump["th1d"], -phi_averaged[irB], c='k', ls=':')
+        ax[0].set_xlim([0,np.pi])
+        ax[0].set_ylim([np.min(abs(phi_averaged[irB])), np.max(abs(phi_averaged[irB]))])
+        print([np.min(phi_averaged[irB]), np.max(phi_averaged[irB])])
 
     # label
     ax[0].set_title(dirtag, fontsize=13)
@@ -348,7 +357,8 @@ def plotTavgedEtaFromDump(tmax=None, average_factor=1.25):
             nzeff = dump["Params"]["Multizone/nzones_eff"]
         r_sonic = dump["rs"]
         mdot = dump["mdot"]
-        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot)[0]
+        gam = dump["gam"]
+        rB = bondi.get_quantity_for_rarr([1], "RB", rs=r_sonic, mdot=mdot, gam=gam)[0]
         tB = np.power(rB, 3./2)
         i5 = np.argmin(abs(dump["r1d"] - 5))
         
@@ -433,12 +443,16 @@ if __name__ == "__main__":
     #dirtag="052825_a0.9_rB2e5_bondi_eks_largerout"
     #dirtag="053025_torus_noehbuffer_noismr_a0.5_lowx1res"
     #dirtag="080625_a0.9_rB2e5_96"
-    #dirtag="092525_a0.9_rB2e5_mom_cons_test"
+    dirtag="092525_a0.9_rB2e5_mom_cons_test"
+    dirtag="102125_a0.9_rB2e5_mom_cons_96"
+    #dirtag="delta/092425_a0.7_rB2e5_momcons"
+    #dirtag="delta/102825_a0.5_rB2e3_momcons"
     #dirtag="051225_oz_a0.9_toriilike_newflr"
     #dirtag="2025/041825_a0.9_rB2e5_jks2_smth2"
 
-    #FE_slice(dirtag, num_files=-1, native=False, sum_each_ann=True)
-    #tavgedSlice(dirtag, 'log_K', num_files=-1, native=False) #, only_sum=1) #, rscale=1)
+    dirtag = gdirtags[-25] # 0.1: -5
+    FE_slice(dirtag, num_files=-1, native=False, sum_each_ann=True)
+    #tavgedSlice(dirtag, 'symlog_FE_norho_A', num_files=-1, native=False) #, only_sum=1) #, rscale=1)
     #plotOmegaFieldvsTh(dirtag, num_files=100)
     #plotTavgedEtaFromDump(50, 1.25)
-    jet_slice(dirtag, 28) #5224) #4783)
+    #jet_slice(dirtag, 28) #5224) #4783)
